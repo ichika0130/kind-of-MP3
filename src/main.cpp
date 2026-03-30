@@ -38,10 +38,9 @@ void setup() {
     delay(500);
 
     // ── Watchdog (10 s) ───────────────────────────────────────────────────────
-    // Deinit the core-default WDT and reinit with our timeout so only this task
-    // is watched.  esp_task_wdt_reset() is called at the top of every loop()
-    // iteration and immediately after any light-sleep wake (see power.cpp).
-    esp_task_wdt_deinit();
+    // esp_task_wdt_init() reconfigures the TWDT if already running (ESP-IDF 4.4),
+    // so no deinit is needed.  esp_task_wdt_reset() is called at the top of every
+    // loop() iteration and immediately after light-sleep wake (see power.cpp).
     esp_task_wdt_init(10, /*panic=*/true);
     esp_task_wdt_add(NULL);   // watch the Arduino loop() task
 

@@ -18,7 +18,7 @@ constexpr uint32_t BLE_NOTIFY_MS  = 500;     // status notification interval
 
 // ─── BLE identity ─────────────────────────────────────────────────────────────
 
-constexpr char BLE_DEVICE_NAME[] = "P3R-Player";
+#define BLE_DEVICE_NAME "P3R-Player"
 
 // ─── UUIDs ────────────────────────────────────────────────────────────────────
 //
@@ -138,7 +138,7 @@ private:
     BLECmd           _queue[QUEUE_SIZE];
     volatile uint8_t _qR = 0;   // read pointer
     volatile uint8_t _qW = 0;   // write pointer
-    portMUX_TYPE     _mux;      // spinlock — initialised in begin()
+    portMUX_TYPE     _mux = portMUX_INITIALIZER_UNLOCKED;  // spinlock
 
     // Helpers
     BLECharacteristic* _makeNotify(BLEService* svc, const char* uuid);

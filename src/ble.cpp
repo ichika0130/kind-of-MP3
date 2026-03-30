@@ -30,8 +30,6 @@ private:
 // ─── begin ────────────────────────────────────────────────────────────────────
 
 bool BLEManager::begin(DisplayState& /*state*/) {
-    portMUX_INITIALIZE(&_mux);
-
     // ── Vibration motor ───────────────────────────────────────────────────────
     pinMode(VIB_PIN, OUTPUT);
     digitalWrite(VIB_PIN, LOW);
