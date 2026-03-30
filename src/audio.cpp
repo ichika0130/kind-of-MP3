@@ -16,7 +16,7 @@ void audio_eof_mp3(const char* /*info*/) {
 
 AudioManager::AudioManager() {
     g_audiomgr = this;
-    // Zero-init shuffle array
+    _titleBuf[0] = '\0';
     for (int i = 0; i < PLAYLIST_MAX; i++) _shuffleOrder[i] = i;
 }
 
@@ -60,7 +60,7 @@ bool AudioManager::begin(DisplayState& state) {
 
     // ── Populate initial DisplayState ─────────────────────────────────────────
 
-    state.songTitle       = getCurrentTrackTitle();
+    strlcpy(state.songTitle, getCurrentTrackTitle(), sizeof(state.songTitle));
     state.songPositionSec = 0;
     state.songDurationSec = 0;   // filled after audio buffers a bit
     state.isPlaying       = _isPlaying && !_isPaused;
@@ -77,8 +77,9 @@ void AudioManager::update(DisplayState& state) {
     _audio.loop();
 
     // ── Refresh DisplayState ──────────────────────────────────────────────────
+    // songTitle: copy from cached _titleBuf — no heap allocation.
 
-    state.songTitle       = getCurrentTrackTitle();
+    strlcpy(state.songTitle, _titleBuf, sizeof(state.songTitle));
     state.songPositionSec = getCurrentPositionSec();
     state.songDurationSec = getTotalDurationSec();
     state.isPlaying       = _isPlaying && !_isPaused;
@@ -172,9 +173,8 @@ void AudioManager::setPlayMode(PlayMode mode) {
 
 // ─── Getters ─────────────────────────────────────────────────────────────────
 
-String AudioManager::getCurrentTrackTitle() {
-    if (_trackCount == 0 || _currentIdx < 0) return "No tracks";
-    return _titleFromPath(_playlist[_currentIdx]);
+const char* AudioManager::getCurrentTrackTitle() const {
+    return (_trackCount > 0) ? _titleBuf : "No tracks";
 }
 
 uint32_t AudioManager::getCurrentPositionSec() {
@@ -274,12 +274,15 @@ bool AudioManager::_scanSD() {
 }
 
 // Open and start playing the track at the given playlist index.
+// Fills _titleBuf here so update() never needs to call _titleFromPath().
 void AudioManager::_startTrack(int index) {
     if (index < 0 || index >= _trackCount) return;
 
     _currentIdx = index;
     _isPaused   = false;
     _isPlaying  = true;
+
+    _titleFromPath(_playlist[index], _titleBuf, sizeof(_titleBuf));
 
     const char* path = _playlist[index].c_str();
     Serial.printf("[audio] playing: %s\n", path);
@@ -311,14 +314,20 @@ void AudioManager::_buildShuffle() {
     _shufflePos = 0;
 }
 
-// Returns the filename without its directory or extension.
+// Extracts the filename stem into buf[len]: strips directory and extension.
 // "/Tracks/Mass Destruction.mp3" → "Mass Destruction"
-String AudioManager::_titleFromPath(const String& path) {
-    int lastSlash = path.lastIndexOf('/');
-    String name = (lastSlash >= 0) ? path.substring(lastSlash + 1) : path;
-    int lastDot  = name.lastIndexOf('.');
-    if (lastDot > 0) name = name.substring(0, lastDot);
-    return name;
+// Pure pointer arithmetic — no String temporaries, no heap allocation.
+void AudioManager::_titleFromPath(const String& path, char* buf, size_t len) {
+    const char* src  = path.c_str();
+    const char* name = strrchr(src, '/');
+    name = name ? name + 1 : src;            // skip past last '/'
+
+    const char* dot  = strrchr(name, '.');
+    size_t      nlen = dot ? (size_t)(dot - name) : strlen(name);
+
+    if (nlen >= len) nlen = len - 1;         // clamp to buffer
+    memcpy(buf, name, nlen);
+    buf[nlen] = '\0';
 }
 
 // Case-insensitive check for .mp3 / .flac extensions.
@@ -326,4 +335,22 @@ bool AudioManager::_isAudioFile(const String& name) {
     String lower = name;
     lower.toLowerCase();
     return lower.endsWith(".mp3") || lower.endsWith(".flac");
+}
+
+// ─── findTrackByName ─────────────────────────────────────────────────────────
+//
+// Linear scan of the playlist.  Title comparison is case-insensitive and uses
+// indexOf so a query of "tartarus" matches "Tartarus.mp3", "tartarus_bgm.flac", etc.
+
+int AudioManager::findTrackByName(const String& name) {
+    String query = name;
+    query.toLowerCase();
+    char   buf[64];
+    for (int i = 0; i < _trackCount; i++) {
+        _titleFromPath(_playlist[i], buf, sizeof(buf));
+        String title = buf;        // only one String alloc per iteration here
+        title.toLowerCase();
+        if (title.indexOf(query) >= 0) return i;
+    }
+    return -1;
 }

@@ -91,12 +91,13 @@ void DisplayManager::wake()  { _disp.ssd1306_command(SSD1306_DISPLAYON);  }
 void DisplayManager::drawNowPlaying(const DisplayState& s) {
     // ── 1. Scrolling title ───────────────────────────────────────────────────
 
-    const char* title = s.songTitle.c_str();
-    int16_t titleW = textWidth(title, 1);   // total pixel width of title string
+    const char* title  = s.songTitle;
+    int16_t     titleW = textWidth(title, 1);   // total pixel width of title string
 
     // Reset scroll state when the track changes
-    if (s.songTitle != _lastTitle) {
-        _lastTitle       = s.songTitle;
+    if (strcmp(s.songTitle, _lastTitle) != 0) {
+        strncpy(_lastTitle, s.songTitle, sizeof(_lastTitle) - 1);
+        _lastTitle[sizeof(_lastTitle) - 1] = '\0';
         _scrollX         = 0;
         _scrollHoldTicks = SCROLL_HOLD_TICKS;
         _lastScrollTick  = millis();

@@ -1,6 +1,7 @@
 #include "power.h"
 #include "esp_sleep.h"      // esp_light_sleep_start, esp_deep_sleep_start, etc.
 #include "driver/gpio.h"    // gpio_wakeup_enable, gpio_wakeup_disable
+#include "esp_task_wdt.h"   // esp_task_wdt_reset — reset WDT immediately on wake
 
 // ─── begin ────────────────────────────────────────────────────────────────────
 
@@ -36,7 +37,9 @@ bool PowerManager::begin() {
     seed /= 16;
     for (uint8_t i = 0; i < 10; i++) _battBuf[i] = seed;
     _battCount = 10;
-    _lastBattMs = millis();
+    // Subtract the full interval so the first update() call immediately
+    // runs _takeBattSample() — state.batteryPct is valid from frame 1.
+    _lastBattMs = millis() - BATT_INTERVAL_MS;
 
     return true;
 }
@@ -88,7 +91,7 @@ void PowerManager::_takeBattSample(DisplayState& state) {
     // Rolling mean → voltage → percentage
     uint32_t sum = 0;
     for (uint8_t i = 0; i < _battCount; i++) sum += _battBuf[i];
-    float rawAvg  = (float)(sum / _battCount);
+    float rawAvg  = (float)sum / (float)_battCount;  // float division — not integer
     float voltage = (rawAvg / 4095.0f) * 3.3f * BATT_DIVIDER;
     uint8_t pct   = _voltToPct(voltage);
 
@@ -211,6 +214,9 @@ void PowerManager::_manageLightSleep(DisplayState& state, AudioManager& audio) {
     esp_light_sleep_start();
 
     // ── Resumed from light sleep ──────────────────────────────────────────────
+    // Reset the task watchdog immediately — sleep duration is not a hang.
+    esp_task_wdt_reset();
+
     // Disable the GPIO wakeup source so it doesn't interfere with the next cycle.
     for (uint8_t pin : SLEEP_BTN_PINS) {
         gpio_wakeup_disable(static_cast<gpio_num_t>(pin));

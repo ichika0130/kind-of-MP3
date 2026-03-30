@@ -70,12 +70,18 @@ public:
     int      getCurrentIndex()const { return _currentIdx; }
     uint8_t  getVolume()      const { return _volume; }
 
-    // Returns filename without path or extension, e.g. "Mass Destruction"
-    String   getCurrentTrackTitle();
+    // Returns filename without path or extension, e.g. "Mass Destruction".
+    // Points to an internal char buffer — valid until the next play() call.
+    const char* getCurrentTrackTitle() const;
 
     // Both return 0 if unavailable (e.g. no track loaded yet).
     uint32_t getCurrentPositionSec();
     uint32_t getTotalDurationSec();
+
+    // Returns the playlist index of the first track whose title contains
+    // 'name' (case-insensitive).  Returns -1 if not found.
+    // Used by BLEManager to locate the Dark Hour BGM ("tartarus").
+    int findTrackByName(const String& name);
 
     // ── Internal callback — do not call from outside ──────────────────────────
     void _onTrackEnd();
@@ -87,6 +93,7 @@ private:
     String   _playlist[PLAYLIST_MAX];   // full paths, e.g. "/song.mp3"
     int      _trackCount = 0;
     int      _currentIdx = 0;
+    char     _titleBuf[64] = {};        // current track title — filled in _startTrack()
 
     // ── Shuffle state ─────────────────────────────────────────────────────────
     int      _shuffleOrder[PLAYLIST_MAX];  // permutation of [0, _trackCount)
@@ -107,8 +114,9 @@ private:
     void _pollHpDetect(DisplayState& state);
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-    bool         _scanSD();
-    void         _startTrack(int index);
-    static String _titleFromPath(const String& path);
-    static bool   _isAudioFile(const String& name);
+    bool  _scanSD();
+    void  _startTrack(int index);
+    // Extracts filename stem from a path into buf[len].  No heap allocation.
+    static void _titleFromPath(const String& path, char* buf, size_t len);
+    static bool _isAudioFile  (const String& name);
 };

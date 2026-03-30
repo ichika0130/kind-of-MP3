@@ -39,16 +39,40 @@ enum class DisplayPage : uint8_t {
 
 // ─── Shared state struct ──────────────────────────────────────────────────────
 //
-// All display data lives here. Other modules (audio, sensors, power, BLE)
-// write into a single global DisplayState; display.cpp only reads from it.
-// Nothing is hard-coded inside the display module.
+// Single source of truth for all display data.  Modules write their own fields;
+// display.cpp only reads.  Field ownership (primary writer in parentheses):
+//
+//  Field(s)                         Owner          Notes
+//  ──────────────────────────────── ────────────── ──────────────────────────────
+//  page                             InputManager   PowerManager also writes on
+//                                                  Dark Hour; BLEManager on
+//                                                  SET_PAGE cmd (shared control)
+//  songTitle                        AudioManager   char buf — no heap alloc
+//  artistName                       AudioManager   reserved for future use
+//  songDurationSec, songPositionSec AudioManager
+//  isPlaying                        AudioManager
+//  playMode                         AudioManager   InputManager / SensorManager /
+//                                                  BLEManager write for immediate
+//                                                  feedback; audio.update() is
+//                                                  authoritative each iteration
+//  volume                           AudioManager   BLEManager writes for immediate
+//                                                  feedback; audio.update() is
+//                                                  authoritative
+//  hour, minute, second             PowerManager   set once via BLE setBaseTime
+//  dateStr                          (unset)        will be written by BLE time sync
+//  stepCount, caloriesBurned        SensorManager
+//  batteryPct, lowBattery           PowerManager
+//  darkHourActive                   PowerManager
+//  isCharging                       (unset)        no charging-detect circuit yet
+//  stepsPerMinute, screenOn         SensorManager
+//  bleConnected                     BLEManager
 
 struct DisplayState {
     // ── Active page ──
     DisplayPage page = DisplayPage::NOW_PLAYING;
 
     // ── NOW_PLAYING ──
-    String   songTitle        = "";
+    char     songTitle[64]    = {};      // char array — avoids heap alloc in loop
     String   artistName       = "";      // reserved — shown in future artist row
     uint32_t songDurationSec  = 0;       // total track length in seconds
     uint32_t songPositionSec  = 0;       // current playback position in seconds
@@ -58,7 +82,7 @@ struct DisplayState {
     uint8_t  hour    = 0;
     uint8_t  minute  = 0;
     uint8_t  second  = 0;
-    String   dateStr = "";   // e.g. "MON 2009/09/14"
+    String   dateStr = "";   // e.g. "MON 2009/09/14" — set by BLE time sync
 
     // ── STEPS ──
     uint32_t stepCount       = 0;
@@ -66,7 +90,7 @@ struct DisplayState {
 
     // ── BATTERY ──
     uint8_t  batteryPct  = 0;    // 0–100
-    bool     isCharging  = false;
+    bool     isCharging  = false;  // no charging-detect circuit; always false for now
 
     // ── AUDIO (written by AudioManager::update) ──
     PlayMode playMode    = PlayMode::SEQUENTIAL;
@@ -79,7 +103,7 @@ struct DisplayState {
     // ── POWER (written by PowerManager::update) ──
     bool     lowBattery     = false; // true when batteryPct ≤ 20
     bool     darkHourActive = false; // true for 60 s at midnight
-    bool     bleConnected   = false; // set by BLE module (Step 6); guards light sleep
+    bool     bleConnected   = false; // set by BLE module; guards light sleep
 };
 
 // ─── Display manager ─────────────────────────────────────────────────────────
@@ -112,7 +136,7 @@ private:
     void drawBattery   (const DisplayState& s);
 
     // ── Scrolling-title state (NOW_PLAYING) ──
-    String         _lastTitle         = "";
+    char           _lastTitle[64]     = {};   // char array matches DisplayState::songTitle
     int16_t        _scrollX           = 0;    // current left-edge of title text
     unsigned long  _lastScrollTick    = 0;
     int16_t        _scrollHoldTicks   = 0;    // non-zero = paused at start/end
