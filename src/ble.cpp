@@ -19,8 +19,8 @@ class CmdCallback : public BLECharacteristicCallbacks {
 public:
     CmdCallback(BLEManager* mgr, BLECmdType type) : _mgr(mgr), _type(type) {}
     void onWrite(BLECharacteristic* chr) override {
-        std::string v = chr->getValue();
-        _mgr->_enqueueCmd(_type, (const uint8_t*)v.data(), (uint8_t)v.size());
+        String v = chr->getValue();
+        _mgr->_enqueueCmd(_type, (const uint8_t*)v.c_str(), (uint8_t)v.length());
     }
 private:
     BLEManager* _mgr;

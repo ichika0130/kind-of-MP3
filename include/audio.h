@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include <SD.h>
 #include <SPI.h>
-#include <Audio.h>     // schreibfaul1/ESP32-audioI2S
+#include "../.pio/libdeps/esp32s3_super_mini/ESP32-audioI2S/src/Audio.h"
 #include "display.h"   // DisplayState, PlayMode
 
 // ─── Pin constants ────────────────────────────────────────────────────────────

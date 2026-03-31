@@ -1,23 +1,18 @@
 #include "audio.h"
 
-// ─── Global EOF callback ─────────────────────────────────────────────────────
-//
-// ESP32-audioI2S calls these free functions at end of file.
-// We bounce them to the single AudioManager instance via a file-scope pointer.
-// audio_eof_mp3 fires for MP3, FLAC, and AAC local-file playback alike.
-
-static AudioManager* g_audiomgr = nullptr;
-
-void audio_eof_mp3(const char* /*info*/) {
-    if (g_audiomgr) g_audiomgr->_onTrackEnd();
-}
-
 // ─── Constructor ─────────────────────────────────────────────────────────────
+//
+// ESP32-audioI2S v3 removed the old free-function callbacks (audio_eof_mp3 etc.)
+// in favour of Audio::audio_info_callback, an inline static std::function.
+// We register it here; evt_eof fires for MP3, FLAC, and AAC local-file playback.
 
 AudioManager::AudioManager() {
-    g_audiomgr = this;
     _titleBuf[0] = '\0';
     for (int i = 0; i < PLAYLIST_MAX; i++) _shuffleOrder[i] = i;
+
+    Audio::audio_info_callback = [this](Audio::msg_t m) {
+        if (m.e == Audio::evt_eof) _onTrackEnd();
+    };
 }
 
 // ─── begin ───────────────────────────────────────────────────────────────────

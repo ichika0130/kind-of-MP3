@@ -41,7 +41,8 @@ void setup() {
     // esp_task_wdt_init() reconfigures the TWDT if already running (ESP-IDF 4.4),
     // so no deinit is needed.  esp_task_wdt_reset() is called at the top of every
     // loop() iteration and immediately after light-sleep wake (see power.cpp).
-    esp_task_wdt_init(10, /*panic=*/true);
+    const esp_task_wdt_config_t wdt_cfg = { .timeout_ms = 10000, .idle_core_mask = 0, .trigger_panic = true };
+    esp_task_wdt_init(&wdt_cfg);
     esp_task_wdt_add(NULL);   // watch the Arduino loop() task
 
     // ── Power (first) ─────────────────────────────────────────────────────────
