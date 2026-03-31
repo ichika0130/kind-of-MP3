@@ -36,7 +36,9 @@ bool AudioManager::begin(DisplayState& state) {
         Serial.printf("[audio] playlist: %d tracks\n", _trackCount);
     }
 
-    // ── I2S / Audio library ───────────────────────────────────────────────────
+    // ── I2S → PCM5102A ───────────────────────────────────────────────────────
+    // PCM5102A receives I²S from the ESP32-S3 and outputs analog stereo to the
+    // 3.5 mm headphone jack.  Volume is controlled digitally via I²S data.
 
     _audio.setPinout(AUDIO_BCLK_PIN, AUDIO_LRC_PIN, AUDIO_DIN_PIN);
     _audio.setVolume(_volume);

@@ -44,7 +44,7 @@ P3R Player is an open-source DIY wearable music player modeled after the cylindr
 |---|---|---|
 | 主控 MCU | ESP32-S3 Super Mini | 主控制器 / Main controller |
 | 显示屏 | 0.91" SSD1306 OLED (128×32) | UI 显示 / UI display |
-| 音频功放 | MAX98357A I2S DAC/Amp | 音频输出 / Audio output |
+| 音频 DAC | PCM5102A I2S DAC | 耳机模拟输出 / Headphone analog output |
 | 存储卡 | MicroSD 模块 (SPI) | 音乐文件存储 / Music storage |
 | IMU | MPU6050 6轴 | 计步 / 摇晃 / 抬腕检测 |
 | 振动马达 | 扁平振动电机 3V | 通知振动 / Haptic feedback |
@@ -63,7 +63,7 @@ P3R Player is an open-source DIY wearable music player modeled after the cylindr
 | SDA | 8 |
 | SCL | 9 |
 
-### I²S 总线 — MAX98357A / I²S Bus — MAX98357A
+### I²S 总线 — PCM5102A / I²S Bus — PCM5102A
 
 | 信号 / Signal | GPIO |
 |---|---|

@@ -7,10 +7,11 @@
 #include "display.h"   // DisplayState, PlayMode
 
 // ─── Pin constants ────────────────────────────────────────────────────────────
+// I²S bus connected to PCM5102A stereo DAC → 3.5 mm headphone jack.
 
-#define AUDIO_BCLK_PIN    4
-#define AUDIO_LRC_PIN     5
-#define AUDIO_DIN_PIN     6
+#define AUDIO_BCLK_PIN    4   // PCM5102A BCK
+#define AUDIO_LRC_PIN     5   // PCM5102A LCK
+#define AUDIO_DIN_PIN     6   // PCM5102A DIN
 
 #define SD_SCK_PIN       12
 #define SD_MISO_PIN      13
