@@ -175,31 +175,63 @@ void PowerManager::_manageDarkHour(DisplayState& state, uint32_t secInDay) {
 //   • Conditions have been stable for SLEEP_GRACE_MS
 //
 // GPIO wake sources:
-//   • Buttons (GPIO 1,2,3,14,15): LOW level (active-LOW with INPUT_PULLUP)
-//   • MPU6050 INT (GPIO 18):      HIGH level (asserted on motion)
+//   • Buttons (GPIO 1,2,3,7,14,15): LOW level (active-LOW with INPUT_PULLUP)
+//   • MPU6050 INT (GPIO 18):        HIGH level (asserted on motion)
+//
+// On wake: shows CLOCK page for CLOCK_WAKE_TIMEOUT_MS.  Any button held or
+// MPU interrupt resets the 5-second timer.  When the timer expires the device
+// sleeps again immediately (forceSleep path, bypassing screenOn guard).
+// InputManager exits clock-wake mode as soon as PLAY is pressed (→ WAKE anim).
 //
 // After waking, execution continues from the next line — no reset, no setup().
 
 void PowerManager::_manageLightSleep(DisplayState& state, AudioManager& audio) {
-    // ── Guard conditions ──────────────────────────────────────────────────────
-    if (state.isPlaying || state.bleConnected || state.screenOn || state.darkHourActive) {
-        _sleepArmMs = 0;   // reset grace timer whenever a guard is active
-        return;
-    }
+    bool forceSleep = false;
 
-    // ── Grace period ──────────────────────────────────────────────────────────
-    if (_sleepArmMs == 0) {
-        _sleepArmMs = millis();
-        return;
-    }
-    if (millis() - _sleepArmMs < SLEEP_GRACE_MS) return;
+    // ── Clock-wake mode ───────────────────────────────────────────────────────
+    //
+    // Active for CLOCK_WAKE_TIMEOUT_MS after each wake.  Any button held (polled
+    // via digitalRead) or MPU INT asserted resets the interaction timer.  The
+    // mode exits early if playback starts or the user presses PLAY (page ≠ CLOCK).
+    if (_clockWakeActive) {
+        // Reset timer on any button held or wrist-raise
+        bool interaction = (digitalRead(SLEEP_MPU_PIN) == HIGH);
+        for (uint8_t pin : SLEEP_BTN_PINS) {
+            if (digitalRead(pin) == LOW) { interaction = true; break; }
+        }
+        if (interaction) _clockWakeStartMs = millis();
 
-    // ── Pre-sleep button check ────────────────────────────────────────────────
-    // Avoid sleeping if a button is already held (would cause instant wake).
-    for (uint8_t pin : SLEEP_BTN_PINS) {
-        if (digitalRead(pin) == LOW) {
-            _sleepArmMs = millis();   // restart grace period
+        // Leave clock-wake mode if audio started, BLE connected, or page changed
+        // (InputManager sets page = WAKE when PLAY is pressed on the CLOCK page).
+        if (state.isPlaying || state.bleConnected || state.page != DisplayPage::CLOCK) {
+            _clockWakeActive = false;
+            _sleepArmMs = 0;
             return;
+        }
+
+        if (millis() - _clockWakeStartMs < CLOCK_WAKE_TIMEOUT_MS) return;
+
+        // 5-second timeout expired — sleep again immediately.
+        _clockWakeActive = false;
+        forceSleep = true;
+    }
+
+    // ── Normal guard conditions (skipped on forceSleep) ───────────────────────
+    if (!forceSleep) {
+        if (state.isPlaying || state.bleConnected || state.screenOn || state.darkHourActive || state.pairingMode) {
+            _sleepArmMs = 0;
+            return;
+        }
+        if (_sleepArmMs == 0) { _sleepArmMs = millis(); return; }
+        if (millis() - _sleepArmMs < SLEEP_GRACE_MS) return;
+
+        // ── Pre-sleep button check ────────────────────────────────────────────
+        // Avoid sleeping if a button is already held (would cause instant wake).
+        for (uint8_t pin : SLEEP_BTN_PINS) {
+            if (digitalRead(pin) == LOW) {
+                _sleepArmMs = millis();
+                return;
+            }
         }
     }
 
@@ -219,14 +251,18 @@ void PowerManager::_manageLightSleep(DisplayState& state, AudioManager& audio) {
     // Reset the task watchdog immediately — sleep duration is not a hang.
     esp_task_wdt_reset();
 
-    // Disable the GPIO wakeup source so it doesn't interfere with the next cycle.
     for (uint8_t pin : SLEEP_BTN_PINS) {
         gpio_wakeup_disable(static_cast<gpio_num_t>(pin));
     }
     gpio_wakeup_disable(static_cast<gpio_num_t>(SLEEP_MPU_PIN));
 
-    _sleepArmMs = 0;   // require conditions to re-stabilise before next sleep
-    Serial.println("[power] light sleep ↑");
+    // Show the CLOCK page and enter clock-wake mode.
+    state.page         = DisplayPage::CLOCK;
+    _clockWakeActive   = true;
+    _clockWakeStartMs  = millis();
+    _sleepArmMs        = 0;
+
+    Serial.println("[power] light sleep ↑ → CLOCK page");
 }
 
 // ─── _checkDeepSleep ─────────────────────────────────────────────────────────

@@ -110,6 +110,43 @@ void BLEManager::update(DisplayState& state, AudioManager& audio,
         }
     }
 
+    // ── Pairing mode management ───────────────────────────────────────────────
+    //
+    // InputManager sets state.pairingMode = true (long press) / false (short press).
+    // BLEManager reacts:
+    //   • Transition to true  → start advertising, record timestamp.
+    //   • Transition to false → stop advertising.
+    //   • Device connects while pairing → auto-exit pairing, revert page.
+    //   • 60 s without a connection → auto-exit pairing, revert page.
+
+    // Auto-exit: a device connected during pairing
+    if (state.pairingMode && conn) {
+        state.pairingMode = false;
+        state.page        = state.prePairingPage;
+        Serial.println("[ble] paired — reverting page");
+    }
+
+    // Auto-exit: 60 s pairing timeout
+    if (state.pairingMode && !conn &&
+        millis() - _pairingStartMs >= 60000UL) {
+        state.pairingMode = false;
+        state.page        = state.prePairingPage;
+        Serial.println("[ble] pairing timeout — reverting page");
+    }
+
+    // Detect pairingMode transitions → start / stop advertising
+    if (state.pairingMode != _prevPairingMode) {
+        _prevPairingMode = state.pairingMode;
+        if (state.pairingMode) {
+            BLEDevice::startAdvertising();
+            _pairingStartMs = millis();
+            Serial.println("[ble] advertising started for pairing");
+        } else {
+            BLEDevice::getAdvertising()->stop();
+            Serial.println("[ble] advertising stopped");
+        }
+    }
+
     // ── Status notifications (every BLE_NOTIFY_MS) ────────────────────────────
     if (conn && millis() - _lastNotifyMs >= BLE_NOTIFY_MS) {
         _lastNotifyMs = millis();

@@ -24,9 +24,10 @@ constexpr uint32_t BATT_INTERVAL_MS  = 30000;   // 30 s between readings
 
 // ─── Sleep constants ──────────────────────────────────────────────────────────
 
-constexpr uint8_t  SLEEP_BTN_PINS[]  = { 1, 2, 3, 14, 15 };  // active-LOW buttons
-constexpr uint8_t  SLEEP_MPU_PIN     = 18;                    // MPU6050 INT, active-HIGH
+constexpr uint8_t  SLEEP_BTN_PINS[]  = { 1, 2, 3, 7, 14, 15 };  // active-LOW buttons (7 = page button)
+constexpr uint8_t  SLEEP_MPU_PIN     = 18;                       // MPU6050 INT, active-HIGH
 constexpr uint32_t SLEEP_GRACE_MS    = 2000;   // idle time required before light sleep
+constexpr uint32_t CLOCK_WAKE_TIMEOUT_MS = 5000;  // show CLOCK page for 5 s after wake
 
 // ─── Dark Hour constants ──────────────────────────────────────────────────────
 
@@ -87,7 +88,11 @@ private:
     DisplayPage   _savedPage      = DisplayPage::NOW_PLAYING;  // page before dark hour
 
     // ── Light sleep ───────────────────────────────────────────────────────────
-    unsigned long _sleepArmMs     = 0;   // 0 = not armed; >0 = when conditions first met
+    unsigned long _sleepArmMs       = 0;     // 0 = not armed; >0 = when conditions first met
+
+    // ── Clock-wake mode (CLOCK page shown for CLOCK_WAKE_TIMEOUT_MS after wake) ─
+    bool          _clockWakeActive  = false;
+    unsigned long _clockWakeStartMs = 0;     // millis() when mode began / last interaction
 
     // ── NVS saved state ───────────────────────────────────────────────────────
     bool     _hasSavedState = false;

@@ -124,6 +124,10 @@ private:
     // Notify throttle
     unsigned long _lastNotifyMs = 0;
 
+    // Pairing mode
+    bool          _prevPairingMode = false;
+    unsigned long _pairingStartMs  = 0;
+
     // Vibration
     bool          _vibActive      = false;
     unsigned long _vibStartMs     = 0;

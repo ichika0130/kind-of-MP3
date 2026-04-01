@@ -97,33 +97,95 @@ void InputManager::begin() {
 void InputManager::update(AudioManager& audio, DisplayState& state) {
     using Ev = ButtonTracker::Event;
 
-    // ── PAGE CYCLE ────────────────────────────────────────────────────────────
-    //   short → advance through NOW_PLAYING → STEPS → BATTERY → (wrap)
-    //   CLOCK is excluded from the manual cycle; it is entered automatically.
-    //   If the current page is outside the cycle (e.g. CLOCK, DARK_HOUR, WAKE),
-    //   the press snaps to NOW_PLAYING.
+    // ── Clock-wake gate ───────────────────────────────────────────────────────
+    // When the device has just woken to the CLOCK page, only the PLAY button
+    // (Button 2, GPIO3) takes action: short press sets page = WAKE (triggering
+    // the HELLO! animation) and calls audio.resume().  All other trackers are
+    // drained so their normal actions do not fire; the 5-second sleep timer is
+    // reset by PowerManager via direct GPIO polling.
+    if (state.page == DisplayPage::CLOCK) {
+        Ev playEv = _play.poll();
+        _page.poll(); _prev.poll(); _next.poll();
+        _volUp.poll(); _volDown.poll();
 
-    switch (_page.poll()) {
-        case Ev::SHORT_PRESS: {
-            static constexpr DisplayPage CYCLE[] = {
-                DisplayPage::NOW_PLAYING,
-                DisplayPage::STEPS,
-                DisplayPage::BATTERY,
-            };
-            constexpr uint8_t CYCLE_LEN = sizeof(CYCLE) / sizeof(CYCLE[0]);
-
-            uint8_t next = 0;   // default: go to NOW_PLAYING if not found in cycle
-            for (uint8_t i = 0; i < CYCLE_LEN; i++) {
-                if (state.page == CYCLE[i]) {
-                    next = (i + 1) % CYCLE_LEN;
-                    break;
-                }
-            }
-            state.page = CYCLE[next];
-            Serial.printf("[input] PAGE short: page → %d\n", (int)state.page);
-            break;
+        if (playEv == Ev::SHORT_PRESS) {
+            state.page = DisplayPage::WAKE;   // triggers HELLO! animation in display
+            audio.resume();
+            Serial.println("[input] PLAY on CLOCK: WAKE animation + resume");
         }
-        default: break;
+        return;   // no other actions while in clock-wake mode
+    }
+
+    // ── PAGE CYCLE / BLE PAIRING ──────────────────────────────────────────────
+    //
+    //   On BLE_PAIRING page:
+    //     short press        → exit pairing mode, revert to previous page
+    //   Otherwise:
+    //     short press        → advance NOW_PLAYING → STEPS → BATTERY → (wrap)
+    //     long press (3 s)   → enter BLE pairing mode (BLE_PAIRING page)
+    //
+    //   CLOCK is excluded from the manual cycle; it is entered automatically.
+    //   If the current page is outside the cycle, short press snaps to NOW_PLAYING.
+
+    {
+        // Static locals track the 3-second long-press accumulator.
+        // pageLongArmed is cleared when the button is released before 3 s.
+        static unsigned long pageLongStartMs = 0;
+        static bool          pageLongArmed   = false;
+
+        Ev pageEv = _page.poll();
+
+        // Cancel arm immediately if the button has been released
+        if (pageLongArmed && digitalRead(BTN_PAGE_PIN) == HIGH) {
+            pageLongArmed = false;
+        }
+
+        if (state.page == DisplayPage::BLE_PAIRING) {
+            // ── On BLE_PAIRING page: only short press exits ───────────────────
+            if (pageEv == Ev::SHORT_PRESS) {
+                state.pairingMode = false;
+                state.page        = state.prePairingPage;
+                pageLongArmed     = false;
+                Serial.println("[input] PAGE short on BLE_PAIRING: exit pairing");
+            }
+        } else {
+            // ── Normal mode ───────────────────────────────────────────────────
+
+            // Arm / accumulate for 3-second long press
+            if (pageEv == Ev::LONG_START) {
+                pageLongStartMs = millis();
+                pageLongArmed   = true;
+            }
+            // Trigger at 600 ms (LONG_START) + 2400 ms (≥12 LONG_REPEATs @ 200 ms)
+            if (pageEv == Ev::LONG_REPEAT && pageLongArmed &&
+                millis() - pageLongStartMs >= 2400UL) {
+                pageLongArmed         = false;
+                state.prePairingPage  = state.page;
+                state.pairingMode     = true;
+                state.page            = DisplayPage::BLE_PAIRING;
+                Serial.println("[input] PAGE long (3 s): enter BLE pairing mode");
+            }
+
+            // Short press: cycle through normal pages
+            if (pageEv == Ev::SHORT_PRESS) {
+                static constexpr DisplayPage CYCLE[] = {
+                    DisplayPage::NOW_PLAYING,
+                    DisplayPage::STEPS,
+                    DisplayPage::BATTERY,
+                };
+                constexpr uint8_t CYCLE_LEN = sizeof(CYCLE) / sizeof(CYCLE[0]);
+
+                uint8_t next = 0;   // default: go to NOW_PLAYING if not found in cycle
+                for (uint8_t i = 0; i < CYCLE_LEN; i++) {
+                    if (state.page == CYCLE[i]) {
+                        next = (i + 1) % CYCLE_LEN;
+                        break;
+                    }
+                }
+                state.page = CYCLE[next];
+                Serial.printf("[input] PAGE short: page → %d\n", (int)state.page);
+            }
+        }
     }
 
     // ── PLAY / PAUSE ──────────────────────────────────────────────────────────

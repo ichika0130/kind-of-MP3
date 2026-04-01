@@ -143,6 +143,7 @@ void DisplayManager::update(DisplayState& state) {
         case DisplayPage::BATTERY:     drawBattery(state);    break;
         case DisplayPage::DARK_HOUR:   drawDarkHour(state);   break;
         case DisplayPage::WAKE:        drawWake(state);       break;
+        case DisplayPage::BLE_PAIRING: drawBtPairing(state); break;
         default: break;
     }
 
@@ -232,6 +233,11 @@ void DisplayManager::drawNowPlaying(const DisplayState& s) {
         if (fillW > 0)
             _disp.fillRect(NP_BATT_X + 1, NP_BATT_Y + yOff + 1,
                            fillW, NP_BATT_H - 2, SSD1306_WHITE);
+    }
+
+    // ── 1b. BLE connected indicator (left of battery, same yOff) ────────────
+    if (s.bleConnected) {
+        _drawBleIcon(16, NP_BATT_Y + yOff);   // 5×9 px, 3 px gap before battery at x=23
     }
 
     // ── 2. Play / pause icon (left of Row 1) ─────────────────────────────────
@@ -347,6 +353,11 @@ void DisplayManager::drawClock(const DisplayState& s) {
         _disp.print(pctBuf);
     }
 
+    // ── 1b. BLE connected indicator (top-left, avoids battery% at top-right) ─
+    if (s.bleConnected) {
+        _drawBleIcon(0, CLK_BATT_Y);
+    }
+
     // ── 2. Hour and minute — separate rows, size-2, centred ──────────────────
     // "HH:MM" at size-2 is 60 px wide; split onto two rows so each fits in 32 px.
     {
@@ -418,6 +429,11 @@ void DisplayManager::drawSteps(const DisplayState& s) {
         _disp.print(pctBuf);
     }
 
+    // ── 1b. BLE connected indicator (top-left) ───────────────────────────────
+    if (s.bleConnected) {
+        _drawBleIcon(0, STP_BATT_Y);
+    }
+
     // ── 2. Step count, size-2, centred ───────────────────────────────────────
     {
         char stepBuf[12];
@@ -466,6 +482,11 @@ void DisplayManager::drawBattery(const DisplayState& s) {
         _disp.setTextSize(2);
         _disp.setCursor((W - pw) / 2, BAT_PCT_Y);
         _disp.print(pctBuf);
+    }
+
+    // ── 1b. BLE connected indicator (top-left) ───────────────────────────────
+    if (s.bleConnected) {
+        _drawBleIcon(0, 0);
     }
 
     // ── 2. Positive-terminal nub (centred above outline) ──────────────────────
@@ -604,6 +625,93 @@ void DisplayManager::drawWake(DisplayState& s) {
         _disp.setCursor(WAKE_X + (int16_t)(i * WAKE_CHAR_W), WAKE_Y);
         _disp.write(WAKE_TEXT[i]);
     }
+}
+
+// ─── BLE PAIRING ─────────────────────────────────────────────────────────────
+//
+//  32 px wide × 128 px tall (rotation 1)
+//
+//  x=0              x=31
+//  ┌────────────────┐
+//  │      BLE       │  y=10  label, size-1, centred
+//  │ ─────────────  │  y=22  separator line
+//  │       ╱        │
+//  │      ╱╲        │  y=30–66  Bluetooth symbol (36 px tall)
+//  │     ╱  ╲       │
+//  │      ╲  ╱      │
+//  │       ╲╱       │
+//  │      PAIR      │  y=76  status ("PAIR" or "CONN"), size-1, centred
+//  └────────────────┘
+
+void DisplayManager::drawBtPairing(const DisplayState& s) {
+    using namespace VLayout;
+
+    // ── "BLE" heading ────────────────────────────────────────────────────────
+    {
+        _disp.setTextSize(1);
+        const char* heading = "BLE";
+        int16_t hw = textWidth(heading, 1);
+        _disp.setCursor((W - hw) / 2, 10);
+        _disp.print(heading);
+    }
+
+    // ── Separator ─────────────────────────────────────────────────────────────
+    _disp.drawFastHLine(4, 22, W - 8, SSD1306_WHITE);
+
+    // ── Bluetooth symbol (36 px tall, centred) ────────────────────────────────
+    //
+    //  Top  (16,30) ─┬─ upper-right (24,40) ─┬─ centre (16,48)
+    //                │                        │
+    //              left                      left
+    //              serifs                   ignored
+    //                │                        │
+    //  Bot  (16,66) ─┴─ lower-right (24,56) ─┴─ centre (16,48)
+
+    constexpr int16_t BT_CX  = W / 2;   // 16
+    constexpr int16_t BT_TOP = 30;
+    constexpr int16_t BT_UR  = 40;      // upper-right junction y
+    constexpr int16_t BT_MID = 48;
+    constexpr int16_t BT_LR  = 56;      // lower-right junction y
+    constexpr int16_t BT_BOT = 66;
+    constexpr int16_t BT_RX  = BT_CX + 8;   // 24 — right arm tip x
+    constexpr int16_t BT_LX  = BT_CX - 8;   //  8 — left  serif tip x
+
+    _disp.drawFastVLine(BT_CX, BT_TOP, BT_BOT - BT_TOP + 1, SSD1306_WHITE);
+    _disp.drawLine(BT_CX, BT_TOP, BT_RX, BT_UR,  SSD1306_WHITE);  // top → upper-right
+    _disp.drawLine(BT_RX, BT_UR,  BT_CX, BT_MID, SSD1306_WHITE);  // upper-right → centre
+    _disp.drawLine(BT_CX, BT_MID, BT_RX, BT_LR,  SSD1306_WHITE);  // centre → lower-right
+    _disp.drawLine(BT_RX, BT_LR,  BT_CX, BT_BOT, SSD1306_WHITE);  // lower-right → bottom
+    _disp.drawLine(BT_CX, BT_TOP, BT_LX, BT_UR,  SSD1306_WHITE);  // top-left serif
+    _disp.drawLine(BT_CX, BT_BOT, BT_LX, BT_LR,  SSD1306_WHITE);  // bottom-left serif
+
+    // ── Status label ──────────────────────────────────────────────────────────
+    {
+        _disp.setTextSize(1);
+        const char* status = s.bleConnected ? "CONN" : "PAIR";
+        int16_t sw = textWidth(status, 1);
+        _disp.setCursor((W - sw) / 2, 76);
+        _disp.print(status);
+    }
+}
+
+// ─── _drawBleIcon ─────────────────────────────────────────────────────────────
+//
+// Compact 5 × 9 px Bluetooth symbol drawn at (x, y).
+// Used as a "connected" indicator on all pages except DARK_HOUR and WAKE.
+
+void DisplayManager::_drawBleIcon(int16_t x, int16_t y) {
+    // Vertical spine
+    _disp.drawFastVLine(x + 2, y, 9, SSD1306_WHITE);
+    // Upper-right arm
+    _disp.drawLine(x + 2, y,     x + 4, y + 2, SSD1306_WHITE);
+    _disp.drawLine(x + 4, y + 2, x + 2, y + 4, SSD1306_WHITE);
+    // Lower-right arm
+    _disp.drawLine(x + 2, y + 4, x + 4, y + 6, SSD1306_WHITE);
+    _disp.drawLine(x + 4, y + 6, x + 2, y + 8, SSD1306_WHITE);
+    // Upper-left serif
+    _disp.drawLine(x + 2, y,     x,     y + 2, SSD1306_WHITE);
+    // Lower-left serif
+    _disp.drawLine(x + 2, y + 8, x,     y + 6, SSD1306_WHITE);
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

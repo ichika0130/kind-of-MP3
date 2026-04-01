@@ -34,7 +34,8 @@ enum class DisplayPage : uint8_t {
     BATTERY,
     PAGE_COUNT,   // upper bound for user-accessible page cycling (keep at 4)
     DARK_HOUR,    // not user-accessible; entered automatically at midnight
-    WAKE          // wake animation; horizontal orientation, not user-accessible
+    WAKE,         // wake animation; horizontal orientation, not user-accessible
+    BLE_PAIRING   // pairing mode; not user-accessible; entered by PAGE long-press
 };
 
 // ─── Shared state struct ──────────────────────────────────────────────────────
@@ -104,6 +105,10 @@ struct DisplayState {
     bool     lowBattery     = false; // true when batteryPct ≤ 20
     bool     darkHourActive = false; // true for 60 s at midnight
     bool     bleConnected   = false; // set by BLE module; guards light sleep
+
+    // ── BLE PAIRING (managed by InputManager + BLEManager) ──
+    bool        pairingMode    = false;                          // true while pairing page is shown
+    DisplayPage prePairingPage = DisplayPage::NOW_PLAYING;       // page before pairing was entered
 };
 
 // ─── Display manager ─────────────────────────────────────────────────────────
@@ -138,6 +143,10 @@ private:
     void drawBattery   (const DisplayState& s);
     void drawDarkHour  (const DisplayState& s);
     void drawWake      (DisplayState& s);            // writes s.page on completion
+    void drawBtPairing (const DisplayState& s);
+
+    // ── Small BLE connected indicator ──
+    void _drawBleIcon  (int16_t x, int16_t y);
 
     // ── Scrolling-title state (NOW_PLAYING) ──
     char           _lastTitle[64]     = {};   // char array matches DisplayState::songTitle
