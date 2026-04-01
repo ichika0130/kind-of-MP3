@@ -84,6 +84,7 @@ P3R Player is an open-source DIY wearable music player modeled after the cylindr
 
 | 功能 / Function | GPIO |
 |---|---|
+| 翻页 / Page Cycle | 7 |
 | 上一曲 / Previous | 1 |
 | 下一曲 / Next | 2 |
 | 播放/暂停 / Play · Pause | 3 |
@@ -183,7 +184,7 @@ All modules communicate through a shared `DisplayState` struct; each module writ
 |---|---|---|
 | `display.h/cpp` | OLED 渲染，4 页，滚动，亮度 | （只读 / read-only）|
 | `audio.h/cpp` | SD 扫描，MP3/FLAC 解码，耳机检测 | `songTitle` `songPositionSec` `songDurationSec` `isPlaying` `playMode` `volume` |
-| `input.h/cpp` | 5 键防抖，短按/长按状态机 | `page`（短按切换）|
+| `input.h/cpp` | 6 键防抖，短按/长按状态机 | `page`（短按翻页循环）|
 | `sensors.h/cpp` | MPU6050 50 Hz 采样，计步，摇晃，抬腕 | `stepCount` `caloriesBurned` `stepsPerMinute` `screenOn` |
 | `power.h/cpp` | 电池 ADC，软件 RTC，睡眠管理，影时间 | `batteryPct` `lowBattery` `hour` `minute` `second` `darkHourActive` |
 | `ble.h/cpp` | BLE 服务器，通知，指令，振动，影时间 BGM | `bleConnected` |
@@ -296,14 +297,11 @@ Activates automatically when the software RTC reaches `00:00:00`, lasts **60 sec
 
 ### 效果 / Effects
 
-- 显示页面强制切换至 Now Playing
-- Display force-switches to the Now Playing page
+- 显示屏唤醒，页面强制切换至 **DARK_HOUR**，以绿色配色显示大号时间
+- Display wakes and force-switches to the **DARK_HOUR** page: large time display with a green colour scheme
 
 - BLE 应用将收到 `darkHourActive = 1` 通知（可用于绿色 UI 等特效）
 - BLE companion app receives `darkHourActive = 1` notification (for green UI effects, etc.)
-
-- 自动在 SD 卡中搜索名称含 `tartarus` 的音乐文件并播放（如 `tartarus.mp3`），结束后恢复之前的曲目
-- Automatically searches the SD card for a file containing `tartarus` in the name and plays it; previous track resumes when the hour ends
 
 - 60 秒后自动恢复正常状态，同一天内不会重复触发
 - Automatically reverts after 60 seconds; fires only once per calendar day
