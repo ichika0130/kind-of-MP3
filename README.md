@@ -117,19 +117,34 @@ P3R Player is an open-source DIY wearable music player modeled after the cylindr
 
 ### 显示界面 / Display Pages
 
-设备共有 **5 个显示页面**（4 个用户可切换，通过翻页键短按循环；1 个系统页面）：
-The device has **5 display pages** — 4 user-accessible (cycled by Button 1 short press), plus 1 system page:
+设备共有 **6 个显示页面**（5 个用户可切换，通过翻页键短按循环；1 个系统页面）：
+The device has **6 display pages** — 5 user-accessible (cycled by Button 1 short press), plus 1 system page:
 
-| 页面 / Page | 内容 / Content |
-|---|---|
-| 🎵 Now Playing | 滚动歌名、进度条、播放/暂停图标、时间 |
-| 🕐 Clock | 软件 RTC 时钟（由 BLE 同步时间）；睡眠唤醒后自动显示 / auto-shown on wake |
-| 👟 Steps | 计步数、卡路里消耗、步频（SPM）|
-| 🔋 Battery | 电池百分比、电量条 |
-| 📶 BLE Pairing | 全屏蓝牙图标，配对状态（PAIR / CONN）；长按翻页键 3 s 进入，60 s 超时或连接后自动退出 / Full-screen Bluetooth symbol; status PAIR or CONN; entered by long-pressing Button 1 for 3 s; auto-exits on connection or 60 s timeout |
+| 页面 / Page | 内容 / Content | 进入方式 / Entry |
+|---|---|---|
+| 🎵 Now Playing | 滚动歌名、进度条、播放/暂停图标、时间 | 翻页键循环 / page cycle |
+| 🕐 Clock | 软件 RTC 时钟（由 BLE 同步时间）；睡眠唤醒后自动显示 / auto-shown on wake | 翻页键循环 / page cycle |
+| 👟 Steps | 计步数、卡路里消耗、步频（SPM）| 翻页键循环 / page cycle |
+| 🔋 Battery | 电池百分比、电量条 | 翻页键循环 / page cycle |
+| 🎛️ EQ | 5 频段均衡器，竖排能量条显示各频段增益，顶部显示当前预设名称 / 5-band equalizer with vertical bar display and preset name | 翻页键循环 / page cycle |
+| 📶 BLE Pairing | 全屏蓝牙图标，配对状态（PAIR / CONN）；长按翻页键 3 s 进入，60 s 超时或连接后自动退出 / Full-screen Bluetooth symbol; status PAIR or CONN; entered by long-pressing Button 1 for 3 s; auto-exits on connection or 60 s timeout | 长按翻页键 3 s / Long-press Button 1 |
+
+页面切换时使用**右滑入场动画**（200 ms），换曲时使用**下滑动画**（NOW_PLAYING 页）。
+Page transitions use a **right-slide-in animation** (200 ms); track changes on the NOW_PLAYING page use a **slide-down animation**.
 
 - 屏幕亮度随音量自动调节 / Screen brightness linked to volume level
 - 拿起设备时屏幕自动亮起，静止 5 秒后熄屏 / Screen wakes on pick-up, sleeps after 5 s of inactivity
+
+### 均衡器 / Equalizer (EQ)
+
+- 4 种内置预设：**FLAT / HEAVY / POP / JAZZ**
+- 4 built-in presets: **FLAT / HEAVY / POP / JAZZ**
+
+- 通过 BLE 配套应用自定义 5 频段增益（32 Hz / 250 Hz / 1 kHz / 4 kHz / 16 kHz）
+- Custom 5-band EQ adjustable via BLE companion app (32 Hz / 250 Hz / 1 kHz / 4 kHz / 16 kHz)
+
+- 设置实时生效，无需重启
+- Settings applied in real-time via BLE — no restart required
 
 ### 传感器 / Sensors (MPU6050)
 
@@ -173,8 +188,8 @@ The device has **5 display pages** — 4 user-accessible (cycled by Button 1 sho
 - 状态通知（每 500 ms）：歌名、进度、播放状态、音量、电量、步数、卡路里、步频、页面、影时间标志
 - **Status notifications** (every 500 ms): song title, position, duration, play state, volume, battery, steps, calories, SPM, page, Dark Hour flag
 
-- 写入指令：播放/暂停、上/下一曲、设置音量/播放模式/页面/时间/体重、触发振动
-- **Write commands**: play/pause, next/prev, set volume/mode/page/time/weight, trigger vibration
+- 写入指令：播放/暂停、上/下一曲、设置音量/播放模式/页面/时间/体重、触发振动、设置 EQ 预设、设置自定义 EQ 频段
+- **Write commands**: play/pause, next/prev, set volume/mode/page/time/weight, trigger vibration, set EQ preset (uint8_t 0–3), set custom EQ bands (5-byte int8 array, one byte per band)
 
 - **BLE 配对模式 / BLE Pairing Mode**：长按翻页键（Button 1）3 秒进入，显示全屏蓝牙图标页面；60 秒无连接自动退出并恢复原页面；配对成功后自动退出；连接中所有页面均在电池图标旁显示小蓝牙图标（DARK_HOUR 和 WAKE 动画页除外）
 - **BLE Pairing Mode**: hold Button 1 (PAGE) for 3 s to enter; shows full-screen Bluetooth icon page; auto-exits after 60 s without a connection, reverting to the previous page; auto-exits on successful pairing; a small Bluetooth icon appears next to the battery indicator on all pages while connected (except DARK_HOUR and WAKE animation)
@@ -282,9 +297,17 @@ BLE 服务 UUID：`4fafc201-1fb5-459e-8fcc-c5c9c331914b`
 
 BLE Service UUID: `4fafc201-1fb5-459e-8fcc-c5c9c331914b`
 
-特征值 UUID 规律：`4fafc2XX-...`，其中 `0x02–0x0d` 为状态通知，`0x10–0x18` 为写入指令。
+特征值 UUID 规律：`4fafc2XX-...`，其中 `0x02–0x0f` 为状态通知，`0x10–0x1a` 为写入指令。
+- `0x0e`：EQ 预设通知（uint8_t）
+- `0x0f`：EQ 频段通知（5 × int8_t）
+- `0x19`：设置 EQ 预设（写入 1 字节，0–3）
+- `0x1a`：设置自定义 EQ 频段（写入 5 字节，每字节对应一个频段增益 dB）
 
-Characteristic UUIDs follow the pattern `4fafc2XX-...`: `0x02–0x0d` are status notify, `0x10–0x18` are write commands.
+Characteristic UUIDs follow the pattern `4fafc2XX-...`: `0x02–0x0f` are status notify, `0x10–0x1a` are write commands.
+- `0x0e`: EQ preset notify (uint8_t)
+- `0x0f`: EQ bands notify (5 × int8_t)
+- `0x19`: set EQ preset (write 1 byte, 0–3)
+- `0x1a`: set custom EQ bands (write 5 bytes, one int8_t gain value per band in dB)
 
 ---
 

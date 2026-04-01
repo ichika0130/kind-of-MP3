@@ -32,10 +32,11 @@ enum class DisplayPage : uint8_t {
     CLOCK,
     STEPS,
     BATTERY,
-    PAGE_COUNT,   // upper bound for user-accessible page cycling (keep at 4)
-    DARK_HOUR,    // not user-accessible; entered automatically at midnight
-    WAKE,         // wake animation; horizontal orientation, not user-accessible
-    BLE_PAIRING   // pairing mode; not user-accessible; entered by PAGE long-press
+    EQ,           // equaliser — user-accessible; entered via page cycle
+    PAGE_COUNT,   // upper bound for BLE SET_PAGE guard (now 5)
+    DARK_HOUR,
+    WAKE,
+    BLE_PAIRING
 };
 
 // ─── Shared state struct ──────────────────────────────────────────────────────
@@ -109,6 +110,10 @@ struct DisplayState {
     // ── BLE PAIRING (managed by InputManager + BLEManager) ──
     bool        pairingMode    = false;                          // true while pairing page is shown
     DisplayPage prePairingPage = DisplayPage::NOW_PLAYING;       // page before pairing was entered
+
+    // ── EQ (written by AudioManager::update; modified by BLE) ──
+    uint8_t  eqPreset   = 0;     // 0=FLAT 1=HEAVY 2=POP 3=JAZZ 0xFF=custom
+    int8_t   eqBands[5] = {};    // per-band gains dB (-40..+6); 32/250/1k/4k/16kHz
 };
 
 // ─── Display manager ─────────────────────────────────────────────────────────
@@ -144,6 +149,7 @@ private:
     void drawDarkHour  (const DisplayState& s);
     void drawWake      (DisplayState& s);            // writes s.page on completion
     void drawBtPairing (const DisplayState& s);
+    void drawEQ         (const DisplayState& s);
 
     // ── Small BLE connected indicator ──
     void _drawBleIcon  (int16_t x, int16_t y);
@@ -169,6 +175,11 @@ private:
 
     // ── Page transition tracking ──
     DisplayPage    _prevPage          = DisplayPage::NOW_PLAYING;
+
+    // ── Page slide-in animation (right → left on page change) ──
+    int16_t       _pageSlideX       = 0;    // current X offset; 0 = settled
+    bool          _pageSlidingIn    = false;
+    unsigned long _pageSlideStartMs = 0;
 
     static constexpr uint16_t SCROLL_TICK_MS   = 40;   // ms between 1-px scroll advances
     static constexpr uint16_t SCROLL_HOLD_TICKS = 30;  // ticks to hold before scrolling

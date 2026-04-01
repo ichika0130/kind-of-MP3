@@ -172,6 +172,7 @@ void InputManager::update(AudioManager& audio, DisplayState& state) {
                     DisplayPage::NOW_PLAYING,
                     DisplayPage::STEPS,
                     DisplayPage::BATTERY,
+                    DisplayPage::EQ,
                 };
                 constexpr uint8_t CYCLE_LEN = sizeof(CYCLE) / sizeof(CYCLE[0]);
 

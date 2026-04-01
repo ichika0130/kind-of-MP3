@@ -64,12 +64,23 @@ public:
 
     void setPlayMode(PlayMode mode);
 
+    // ── EQ ────────────────────────────────────────────────────────────────────────
+    // Apply a named preset (0=FLAT 1=HEAVY 2=POP 3=JAZZ).
+    // Stores preset index + band values in internal state and calls _applyBandsToHW().
+    void applyEQPreset(uint8_t preset);
+
+    // Set custom per-band gains (5 × int8_t, clamped to −40..+6 dB internally).
+    // Sets _eqPreset to 0xFF (custom) and calls _applyBandsToHW().
+    void setEQBands(const int8_t bands[5]);
+
     // ── Getters ───────────────────────────────────────────────────────────────
 
     PlayMode getPlayMode()    const { return _playMode; }
     int      getTrackCount()  const { return _trackCount; }
     int      getCurrentIndex()const { return _currentIdx; }
     uint8_t  getVolume()      const { return _volume; }
+    uint8_t       getEQPreset() const { return _eqPreset; }
+    const int8_t* getEQBands()  const { return _eqBands;  }
 
     // Returns filename without path or extension, e.g. "Mass Destruction".
     // Points to an internal char buffer — valid until the next play() call.
@@ -112,6 +123,11 @@ private:
     unsigned long _hpLastEdgeMs     = 0;
     static constexpr uint16_t HP_DEBOUNCE_MS = 60;
     void _pollHpDetect(DisplayState& state);
+
+    // ── EQ ───────────────────────────────────────────────────────────────────────
+    uint8_t _eqPreset   = 0;          // 0–3 = preset, 0xFF = custom
+    int8_t  _eqBands[5] = {};         // per-band gains, dB; bands: 32,250,1k,4k,16kHz
+    void    _applyBandsToHW();        // maps 5 bands → setTone(low, mid, high)
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     bool  _scanSD();

@@ -41,6 +41,8 @@ constexpr uint32_t BLE_NOTIFY_MS  = 500;     // status notification interval
 #define BLE_CHR_SPM        "4fafc20b-1fb5-459e-8fcc-c5c9c331914b"  // uint16 LE
 #define BLE_CHR_PAGE       "4fafc20c-1fb5-459e-8fcc-c5c9c331914b"  // uint8 DisplayPage
 #define BLE_CHR_DARK_HOUR  "4fafc20d-1fb5-459e-8fcc-c5c9c331914b"  // uint8: 0/1
+#define BLE_CHR_EQ_PRESET  "4fafc20e-1fb5-459e-8fcc-c5c9c331914b"  // uint8 (0–3/0xFF)
+#define BLE_CHR_EQ_BANDS   "4fafc20f-1fb5-459e-8fcc-c5c9c331914b"  // 5×int8 array
 
 // Commands — write (with or without response)
 #define BLE_CMD_PLAYPAUSE  "4fafc210-1fb5-459e-8fcc-c5c9c331914b"  // no payload
@@ -52,6 +54,8 @@ constexpr uint32_t BLE_NOTIFY_MS  = 500;     // status notification interval
 #define BLE_CMD_SET_TIME   "4fafc216-1fb5-459e-8fcc-c5c9c331914b"  // 3 bytes: [h, m, s]
 #define BLE_CMD_SET_WEIGHT "4fafc217-1fb5-459e-8fcc-c5c9c331914b"  // 4 bytes: float LE (kg)
 #define BLE_CMD_VIBRATE    "4fafc218-1fb5-459e-8fcc-c5c9c331914b"  // 2 bytes: uint16 LE (ms)
+#define BLE_CMD_SET_EQ_PRESET "4fafc219-1fb5-459e-8fcc-c5c9c331914b"  // 1 byte: 0–3
+#define BLE_CMD_SET_EQ_BANDS  "4fafc21a-1fb5-459e-8fcc-c5c9c331914b"  // 5 bytes: int8×5
 
 // ─── Internal command type ────────────────────────────────────────────────────
 
@@ -65,6 +69,8 @@ enum class BLECmdType : uint8_t {
     SET_PAGE,
     SET_BASE_TIME,
     SET_USER_WEIGHT,
+    SET_EQ_PRESET,
+    SET_EQ_BANDS,
     TRIGGER_VIBRATION
 };
 
@@ -113,6 +119,8 @@ private:
     BLECharacteristic* _cSpm      = nullptr;
     BLECharacteristic* _cPage     = nullptr;
     BLECharacteristic* _cDarkHour = nullptr;
+    BLECharacteristic* _cEqPreset = nullptr;
+    BLECharacteristic* _cEqBands  = nullptr;
 
     // Set true only when begin() succeeds; update() is a no-op otherwise.
     bool _initialized = false;

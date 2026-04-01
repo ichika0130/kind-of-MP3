@@ -42,6 +42,7 @@ bool AudioManager::begin(DisplayState& state) {
 
     _audio.setPinout(AUDIO_BCLK_PIN, AUDIO_LRC_PIN, AUDIO_DIN_PIN);
     _audio.setVolume(_volume);
+    applyEQPreset(0);   // boot default: FLAT
 
     // ── Headphone detect ─────────────────────────────────────────────────────
 
@@ -82,6 +83,8 @@ void AudioManager::update(DisplayState& state) {
     state.isPlaying       = _isPlaying && !_isPaused;
     state.playMode        = _playMode;
     state.volume          = _volume;
+    state.eqPreset = _eqPreset;
+    memcpy(state.eqBands, _eqBands, sizeof(_eqBands));
 
     // ── Headphone detection ───────────────────────────────────────────────────
 
@@ -166,6 +169,50 @@ void AudioManager::setPlayMode(PlayMode mode) {
         _buildShuffle();
     }
     Serial.printf("[audio] play mode: %d\n", (int)mode);
+}
+
+// ─── applyEQPreset ────────────────────────────────────────────────────────────
+
+void AudioManager::applyEQPreset(uint8_t preset) {
+    static constexpr int8_t PRESETS[4][5] = {
+        { 0,  0,  0,  0,  0},   // 0 FLAT
+        { 8,  4,  0,  0,  0},   // 1 HEAVY — boost low and low-mid
+        { 0,  2,  4,  2,  0},   // 2 POP   — mid presence boost
+        { 4,  2,  0,  2,  4},   // 3 JAZZ  — warm lows + airy highs
+    };
+    if (preset >= 4) return;
+    _eqPreset = preset;
+    for (uint8_t i = 0; i < 5; i++) _eqBands[i] = PRESETS[preset][i];
+    _applyBandsToHW();
+    Serial.printf("[audio] EQ preset %d applied\n", preset);
+}
+
+// ─── setEQBands ───────────────────────────────────────────────────────────────
+
+void AudioManager::setEQBands(const int8_t bands[5]) {
+    for (uint8_t i = 0; i < 5; i++) {
+        int8_t g = bands[i];
+        if (g < -40) g = -40;
+        if (g >   6) g =   6;
+        _eqBands[i] = g;
+    }
+    _eqPreset = 0xFF;   // custom — no named preset active
+    _applyBandsToHW();
+    Serial.println("[audio] EQ custom bands applied");
+}
+
+// ─── _applyBandsToHW ─────────────────────────────────────────────────────────
+//
+// Maps 5 logical bands (32, 250, 1k, 4k, 16kHz) to ESP32-audioI2S setTone():
+//   gainLowPass  — lowshelf  ~500 Hz : weighted blend of bands[0] and bands[1]
+//   gainBandPass — peakingEQ ~1800 Hz: bands[2]
+//   gainHighPass — highshelf ~6000 Hz: weighted blend of bands[3] and bands[4]
+
+void AudioManager::_applyBandsToHW() {
+    float low  = _eqBands[0] * 0.6f + _eqBands[1] * 0.4f;
+    float mid  = (float)_eqBands[2];
+    float high = _eqBands[3] * 0.4f + _eqBands[4] * 0.6f;
+    _audio.setTone(low, mid, high);
 }
 
 // ─── Getters ─────────────────────────────────────────────────────────────────

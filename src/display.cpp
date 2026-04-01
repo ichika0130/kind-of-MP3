@@ -76,6 +76,7 @@ namespace VLayout {
     constexpr uint16_t WAKE_CHAR_MS = 150;   // ms between character reveals
     constexpr uint16_t WAKE_HOLD_MS = 500;   // ms to hold full "HELLO!" before transitioning
     constexpr uint16_t SLIDE_MS     = 200;   // ms for track-change slide-out
+    constexpr uint16_t PAGE_SLIDE_MS = 200;   // ms for page slide-in (right → left)
 
     // DARK_HOUR — populated in next step
 }
@@ -122,6 +123,28 @@ void DisplayManager::update(DisplayState& state) {
 
     _disp.clearDisplay();
 
+    // ── Page slide-in animation (right → left, PAGE_SLIDE_MS) ─────────────────
+    // Fires on any page transition except: to/from WAKE (uses rotation-0),
+    // and to DARK_HOUR (has its own scan-line entrance animation).
+    if (state.page != _prevPage
+        && state.page  != DisplayPage::WAKE
+        && state.page  != DisplayPage::DARK_HOUR
+        && _prevPage   != DisplayPage::WAKE) {
+        _pageSlidingIn    = true;
+        _pageSlideStartMs = millis();
+        _pageSlideX       = VLayout::W;
+    }
+    if (_pageSlidingIn) {
+        unsigned long slideElapsed = millis() - _pageSlideStartMs;
+        if (slideElapsed >= VLayout::PAGE_SLIDE_MS) {
+            _pageSlidingIn = false;
+            _pageSlideX    = 0;
+        } else {
+            _pageSlideX = (int16_t)(VLayout::W -
+                (int16_t)((float)slideElapsed / VLayout::PAGE_SLIDE_MS * VLayout::W));
+        }
+    }
+
     // ── Reset WAKE animation state whenever the page is freshly entered ───────
     if (state.page == DisplayPage::WAKE && _prevPage != DisplayPage::WAKE) {
         _wakeAnimState = 0;
@@ -143,6 +166,7 @@ void DisplayManager::update(DisplayState& state) {
         case DisplayPage::BATTERY:     drawBattery(state);    break;
         case DisplayPage::DARK_HOUR:   drawDarkHour(state);   break;
         case DisplayPage::WAKE:        drawWake(state);       break;
+        case DisplayPage::EQ:          drawEQ(state);        break;
         case DisplayPage::BLE_PAIRING: drawBtPairing(state); break;
         default: break;
     }
@@ -224,34 +248,34 @@ void DisplayManager::drawNowPlaying(const DisplayState& s) {
     const int16_t yOff = _slideOffset;
 
     // ── 1. Battery icon (top-right, persistent) ──────────────────────────────
-    _disp.drawRect(NP_BATT_X, NP_BATT_Y + yOff, NP_BATT_W, NP_BATT_H, SSD1306_WHITE);
-    _disp.fillRect(NP_BATT_X + NP_BATT_W,
+    _disp.drawRect(NP_BATT_X + _pageSlideX, NP_BATT_Y + yOff, NP_BATT_W, NP_BATT_H, SSD1306_WHITE);
+    _disp.fillRect(NP_BATT_X + NP_BATT_W + _pageSlideX,
                    NP_BATT_Y + yOff + (NP_BATT_H - NP_BATT_NUB_H) / 2,
                    NP_BATT_NUB_W, NP_BATT_NUB_H, SSD1306_WHITE);
     {
         int16_t fillW = (int16_t)((float)s.batteryPct / 100.0f * (NP_BATT_W - 2));
         if (fillW > 0)
-            _disp.fillRect(NP_BATT_X + 1, NP_BATT_Y + yOff + 1,
+            _disp.fillRect(NP_BATT_X + 1 + _pageSlideX, NP_BATT_Y + yOff + 1,
                            fillW, NP_BATT_H - 2, SSD1306_WHITE);
     }
 
     // ── 1b. BLE connected indicator (left of battery, same yOff) ────────────
     if (s.bleConnected) {
-        _drawBleIcon(16, NP_BATT_Y + yOff);   // 5×9 px, 3 px gap before battery at x=23
+        _drawBleIcon(16 + _pageSlideX, NP_BATT_Y + yOff);   // 5×9 px, 3 px gap before battery at x=23
     }
 
     // ── 2. Play / pause icon (left of Row 1) ─────────────────────────────────
     if (s.isPlaying) {
         // ▶ right-pointing filled triangle, 3 columns × 6 px tall
         for (int i = 0; i < 3; i++) {
-            _disp.drawFastVLine(NP_ICON_X + i,
+            _disp.drawFastVLine(NP_ICON_X + i + _pageSlideX,
                                 NP_ROW1_Y + yOff + i,
                                 6 - (2 * i), SSD1306_WHITE);
         }
     } else {
         // ❚❚ two 2×6 bars, 1 px gap
-        _disp.fillRect(NP_ICON_X,     NP_ROW1_Y + yOff, 2, 6, SSD1306_WHITE);
-        _disp.fillRect(NP_ICON_X + 3, NP_ROW1_Y + yOff, 2, 6, SSD1306_WHITE);
+        _disp.fillRect(NP_ICON_X + _pageSlideX,     NP_ROW1_Y + yOff, 2, 6, SSD1306_WHITE);
+        _disp.fillRect(NP_ICON_X + 3 + _pageSlideX, NP_ROW1_Y + yOff, 2, 6, SSD1306_WHITE);
     }
 
     // ── 3. Remaining time (right-aligned in Row 1) ────────────────────────────
@@ -263,7 +287,7 @@ void DisplayManager::drawNowPlaying(const DisplayState& s) {
                  (unsigned long)(rem / 60), (unsigned long)(rem % 60));
         int16_t tw = textWidth(timeBuf, 1);
         _disp.setTextSize(1);
-        _disp.setCursor(W - tw, NP_ROW1_Y + yOff);
+        _disp.setCursor(W - tw + _pageSlideX, NP_ROW1_Y + yOff);
         _disp.print(timeBuf);
     }
 
@@ -273,7 +297,7 @@ void DisplayManager::drawNowPlaying(const DisplayState& s) {
         _disp.setTextSize(1);
 
         if (titleW <= W) {
-            _disp.setCursor(0, NP_TITLE_Y + yOff);
+            _disp.setCursor(0 + _pageSlideX, NP_TITLE_Y + yOff);
             _disp.print(_lastTitle);
         } else {
             // Scroll position only advances while not mid-slide
@@ -292,7 +316,7 @@ void DisplayManager::drawNowPlaying(const DisplayState& s) {
                     }
                 }
             }
-            _disp.setCursor(_scrollX, NP_TITLE_Y + yOff);
+            _disp.setCursor(_scrollX + _pageSlideX, NP_TITLE_Y + yOff);
             _disp.print(_lastTitle);
         }
     }
@@ -306,7 +330,7 @@ void DisplayManager::drawNowPlaying(const DisplayState& s) {
             default:                   modeStr = "SEQ"; break;
         }
         _disp.setTextSize(1);
-        _disp.setCursor(0, NP_MODE_Y + yOff);
+        _disp.setCursor(0 + _pageSlideX, NP_MODE_Y + yOff);
         _disp.print(modeStr);
     }
 
@@ -316,7 +340,7 @@ void DisplayManager::drawNowPlaying(const DisplayState& s) {
         if (filledBlocks > (int)NP_VOL_TOTAL) filledBlocks = (int)NP_VOL_TOTAL;
 
         for (int i = 0; i < (int)NP_VOL_TOTAL; i++) {
-            int16_t bx = NP_VOL_STARTX + (int16_t)(i * (NP_VOL_BW + NP_VOL_GAP));
+            int16_t bx = NP_VOL_STARTX + (int16_t)(i * (NP_VOL_BW + NP_VOL_GAP)) + _pageSlideX;
             if (i < filledBlocks) {
                 _disp.fillRect(bx, NP_VOL_Y + yOff, NP_VOL_BW, NP_VOL_BH, SSD1306_WHITE);
             } else {
@@ -349,13 +373,13 @@ void DisplayManager::drawClock(const DisplayState& s) {
         snprintf(pctBuf, sizeof(pctBuf), "%d%%", s.batteryPct);
         int16_t pw = textWidth(pctBuf, 1);
         _disp.setTextSize(1);
-        _disp.setCursor(W - pw, CLK_BATT_Y);
+        _disp.setCursor(W - pw + _pageSlideX, CLK_BATT_Y);
         _disp.print(pctBuf);
     }
 
     // ── 1b. BLE connected indicator (top-left, avoids battery% at top-right) ─
     if (s.bleConnected) {
-        _drawBleIcon(0, CLK_BATT_Y);
+        _drawBleIcon(0 + _pageSlideX, CLK_BATT_Y);
     }
 
     // ── 2. Hour and minute — separate rows, size-2, centred ──────────────────
@@ -369,9 +393,9 @@ void DisplayManager::drawClock(const DisplayState& s) {
         const int16_t centreX = (W - digitW) / 2;     // (32-24)/2 = 4
 
         _disp.setTextSize(2);
-        _disp.setCursor(centreX, CLK_HH_Y);
+        _disp.setCursor(centreX + _pageSlideX, CLK_HH_Y);
         _disp.print(hhBuf);
-        _disp.setCursor(centreX, CLK_MM_Y);
+        _disp.setCursor(centreX + _pageSlideX, CLK_MM_Y);
         _disp.print(mmBuf);
     }
 
@@ -389,16 +413,16 @@ void DisplayManager::drawClock(const DisplayState& s) {
             strncpy(dayBuf, ds, dayLen);
 
             int16_t dw = textWidth(dayBuf, 1);
-            _disp.setCursor((W - dw) / 2, CLK_DAY_Y);
+            _disp.setCursor((W - dw) / 2 + _pageSlideX, CLK_DAY_Y);
             _disp.print(dayBuf);
 
             const char* datePart = sp + 1;
             int16_t ddw = textWidth(datePart, 1);
-            _disp.setCursor((W - ddw) / 2, CLK_DATE_Y);
+            _disp.setCursor((W - ddw) / 2 + _pageSlideX, CLK_DATE_Y);
             _disp.print(datePart);
         } else {
             int16_t dw = textWidth(ds, 1);
-            _disp.setCursor((W - dw) / 2, CLK_DAY_Y);
+            _disp.setCursor((W - dw) / 2 + _pageSlideX, CLK_DAY_Y);
             _disp.print(ds);
         }
     }
@@ -425,13 +449,13 @@ void DisplayManager::drawSteps(const DisplayState& s) {
         snprintf(pctBuf, sizeof(pctBuf), "%d%%", s.batteryPct);
         int16_t pw = textWidth(pctBuf, 1);
         _disp.setTextSize(1);
-        _disp.setCursor(W - pw, STP_BATT_Y);
+        _disp.setCursor(W - pw + _pageSlideX, STP_BATT_Y);
         _disp.print(pctBuf);
     }
 
     // ── 1b. BLE connected indicator (top-left) ───────────────────────────────
     if (s.bleConnected) {
-        _drawBleIcon(0, STP_BATT_Y);
+        _drawBleIcon(0 + _pageSlideX, STP_BATT_Y);
     }
 
     // ── 2. Step count, size-2, centred ───────────────────────────────────────
@@ -440,7 +464,7 @@ void DisplayManager::drawSteps(const DisplayState& s) {
         formatSteps(stepBuf, sizeof(stepBuf), s.stepCount);
         int16_t sw = textWidth(stepBuf, 2);
         _disp.setTextSize(2);
-        _disp.setCursor((W - sw) / 2, STP_COUNT_Y);
+        _disp.setCursor((W - sw) / 2 + _pageSlideX, STP_COUNT_Y);
         _disp.print(stepBuf);
     }
 
@@ -450,7 +474,7 @@ void DisplayManager::drawSteps(const DisplayState& s) {
         snprintf(calBuf, sizeof(calBuf), "%.1f kcal", s.caloriesBurned);
         int16_t cw = textWidth(calBuf, 1);
         _disp.setTextSize(1);
-        _disp.setCursor((W - cw) / 2, STP_CAL_Y);
+        _disp.setCursor((W - cw) / 2 + _pageSlideX, STP_CAL_Y);
         _disp.print(calBuf);
     }
 }
@@ -480,29 +504,29 @@ void DisplayManager::drawBattery(const DisplayState& s) {
         snprintf(pctBuf, sizeof(pctBuf), "%d%%", s.batteryPct);
         int16_t pw = textWidth(pctBuf, 2);
         _disp.setTextSize(2);
-        _disp.setCursor((W - pw) / 2, BAT_PCT_Y);
+        _disp.setCursor((W - pw) / 2 + _pageSlideX, BAT_PCT_Y);
         _disp.print(pctBuf);
     }
 
     // ── 1b. BLE connected indicator (top-left) ───────────────────────────────
     if (s.bleConnected) {
-        _drawBleIcon(0, 0);
+        _drawBleIcon(0 + _pageSlideX, 0);
     }
 
     // ── 2. Positive-terminal nub (centred above outline) ──────────────────────
-    _disp.fillRect(BAT_BAR_X + (BAT_BAR_W - BAT_NUB_W) / 2,
+    _disp.fillRect(BAT_BAR_X + (BAT_BAR_W - BAT_NUB_W) / 2 + _pageSlideX,
                    BAT_BAR_Y - BAT_NUB_H,
                    BAT_NUB_W, BAT_NUB_H, SSD1306_WHITE);
 
     // ── 3. Outline ────────────────────────────────────────────────────────────
-    _disp.drawRect(BAT_BAR_X, BAT_BAR_Y, BAT_BAR_W, BAT_BAR_H, SSD1306_WHITE);
+    _disp.drawRect(BAT_BAR_X + _pageSlideX, BAT_BAR_Y, BAT_BAR_W, BAT_BAR_H, SSD1306_WHITE);
 
     // ── 4. Fill from bottom, proportional to batteryPct ─────────────────────
     {
         int16_t inner  = BAT_BAR_H - 2;
         int16_t fillH  = (int16_t)((float)s.batteryPct / 100.0f * inner);
         if (fillH > 0) {
-            _disp.fillRect(BAT_BAR_X + 1,
+            _disp.fillRect(BAT_BAR_X + 1 + _pageSlideX,
                            BAT_BAR_Y + 1 + inner - fillH,
                            BAT_BAR_W - 2, fillH, SSD1306_WHITE);
         }
@@ -651,12 +675,12 @@ void DisplayManager::drawBtPairing(const DisplayState& s) {
         _disp.setTextSize(1);
         const char* heading = "BLE";
         int16_t hw = textWidth(heading, 1);
-        _disp.setCursor((W - hw) / 2, 10);
+        _disp.setCursor((W - hw) / 2 + _pageSlideX, 10);
         _disp.print(heading);
     }
 
     // ── Separator ─────────────────────────────────────────────────────────────
-    _disp.drawFastHLine(4, 22, W - 8, SSD1306_WHITE);
+    _disp.drawFastHLine(4 + _pageSlideX, 22, W - 8, SSD1306_WHITE);
 
     // ── Bluetooth symbol (36 px tall, centred) ────────────────────────────────
     //
@@ -676,21 +700,117 @@ void DisplayManager::drawBtPairing(const DisplayState& s) {
     constexpr int16_t BT_RX  = BT_CX + 8;   // 24 — right arm tip x
     constexpr int16_t BT_LX  = BT_CX - 8;   //  8 — left  serif tip x
 
-    _disp.drawFastVLine(BT_CX, BT_TOP, BT_BOT - BT_TOP + 1, SSD1306_WHITE);
-    _disp.drawLine(BT_CX, BT_TOP, BT_RX, BT_UR,  SSD1306_WHITE);  // top → upper-right
-    _disp.drawLine(BT_RX, BT_UR,  BT_CX, BT_MID, SSD1306_WHITE);  // upper-right → centre
-    _disp.drawLine(BT_CX, BT_MID, BT_RX, BT_LR,  SSD1306_WHITE);  // centre → lower-right
-    _disp.drawLine(BT_RX, BT_LR,  BT_CX, BT_BOT, SSD1306_WHITE);  // lower-right → bottom
-    _disp.drawLine(BT_CX, BT_TOP, BT_LX, BT_UR,  SSD1306_WHITE);  // top-left serif
-    _disp.drawLine(BT_CX, BT_BOT, BT_LX, BT_LR,  SSD1306_WHITE);  // bottom-left serif
+    _disp.drawFastVLine(BT_CX + _pageSlideX, BT_TOP, BT_BOT - BT_TOP + 1, SSD1306_WHITE);
+    _disp.drawLine(BT_CX + _pageSlideX, BT_TOP, BT_RX + _pageSlideX, BT_UR,  SSD1306_WHITE);
+    _disp.drawLine(BT_RX + _pageSlideX, BT_UR,  BT_CX + _pageSlideX, BT_MID, SSD1306_WHITE);
+    _disp.drawLine(BT_CX + _pageSlideX, BT_MID, BT_RX + _pageSlideX, BT_LR,  SSD1306_WHITE);
+    _disp.drawLine(BT_RX + _pageSlideX, BT_LR,  BT_CX + _pageSlideX, BT_BOT, SSD1306_WHITE);
+    _disp.drawLine(BT_CX + _pageSlideX, BT_TOP, BT_LX + _pageSlideX, BT_UR,  SSD1306_WHITE);
+    _disp.drawLine(BT_CX + _pageSlideX, BT_BOT, BT_LX + _pageSlideX, BT_LR,  SSD1306_WHITE);
 
     // ── Status label ──────────────────────────────────────────────────────────
     {
         _disp.setTextSize(1);
         const char* status = s.bleConnected ? "CONN" : "PAIR";
         int16_t sw = textWidth(status, 1);
-        _disp.setCursor((W - sw) / 2, 76);
+        _disp.setCursor((W - sw) / 2 + _pageSlideX, 76);
         _disp.print(status);
+    }
+}
+
+// ─── EQ ───────────────────────────────────────────────────────────────────────
+//
+//  32 px wide × 128 px tall (rotation 1)
+//
+//  x=0              x=31
+//  ┌──────────[BAT]┐  y=0   battery icon (persistent, top-right)
+//  │               │
+//  │     FLAT      │  y=12  preset name, size-1, centred
+//  │               │
+//  │  ┌─┐┌─┐┌─┐┌─┐┌─┐  y=24–96  5 vertical bars (3×72 px each)
+//  │  │ ││ ││ ││ ││ ││  │
+//  │  └─┘└─┘└─┘└─┘└─┘
+//  │  32 250 1k 4k 16k  y=100  frequency labels, size-1
+//  └───────────────┘
+
+void DisplayManager::drawEQ(const DisplayState& s) {
+    using namespace VLayout;
+
+    // ── Battery icon (top-right, same layout as NOW_PLAYING) ─────────────────
+    _disp.drawRect(NP_BATT_X + _pageSlideX, NP_BATT_Y, NP_BATT_W, NP_BATT_H, SSD1306_WHITE);
+    _disp.fillRect(NP_BATT_X + NP_BATT_W + _pageSlideX,
+                   NP_BATT_Y + (NP_BATT_H - NP_BATT_NUB_H) / 2,
+                   NP_BATT_NUB_W, NP_BATT_NUB_H, SSD1306_WHITE);
+    {
+        int16_t fillW = (int16_t)((float)s.batteryPct / 100.0f * (NP_BATT_W - 2));
+        if (fillW > 0)
+            _disp.fillRect(NP_BATT_X + 1 + _pageSlideX, NP_BATT_Y + 1,
+                           fillW, NP_BATT_H - 2, SSD1306_WHITE);
+    }
+
+    // ── BLE connected indicator ───────────────────────────────────────────────
+    if (s.bleConnected) {
+        _drawBleIcon(16 + _pageSlideX, NP_BATT_Y);
+    }
+
+    // ── Preset name, centred ─────────────────────────────────────────────────
+    {
+        static const char* const PRESET_NAMES[] = {"FLAT", "HEAVY", "POP", "JAZZ"};
+        const char* name = (s.eqPreset < 4) ? PRESET_NAMES[s.eqPreset] : "CUST";
+        _disp.setTextSize(1);
+        int16_t nw = textWidth(name, 1);
+        _disp.setCursor((W - nw) / 2 + _pageSlideX, 12);
+        _disp.print(name);
+    }
+
+    // ── 5 vertical bars ───────────────────────────────────────────────────────
+    //
+    // Bar gain range −40..+6 dB = 46 dB total.  Fill rises from bottom:
+    //   fillH = (gain + 40) / 46 * (BAR_H − 2)  (inner height)
+    // A thin 0 dB reference line is drawn at 6/46 of the way from the top.
+
+    constexpr int16_t BAR_W      =  3;
+    constexpr int16_t BAR_GAP    =  2;
+    constexpr int16_t BAR_TOP    = 24;
+    constexpr int16_t BAR_H      = 72;
+    constexpr int16_t LABEL_Y    = BAR_TOP + BAR_H + 4;   // 100
+    // total strip width = 5×3 + 4×2 = 23 px; start x = (32−23)/2 = 4
+    constexpr int16_t BAR_START  = (W - (5 * BAR_W + 4 * BAR_GAP)) / 2;  // 4
+
+    // 0 dB reference line (6 dB from top of bar inner area)
+    constexpr int16_t ZERO_DB_Y  = BAR_TOP + 1 +
+        (int16_t)(6.0f / 46.0f * (BAR_H - 2));   // ≈ 34
+
+    for (uint8_t i = 0; i < 5; i++) {
+        int16_t bx = BAR_START + (int16_t)(i * (BAR_W + BAR_GAP)) + _pageSlideX;
+
+        // Outline
+        _disp.drawRect(bx, BAR_TOP, BAR_W, BAR_H, SSD1306_WHITE);
+
+        // Fill from bottom
+        int8_t gain = s.eqBands[i];
+        if (gain < -40) gain = -40;
+        if (gain >   6) gain =   6;
+        int16_t fillH = (int16_t)(((float)(gain + 40) / 46.0f) * (BAR_H - 2));
+        if (fillH > 0) {
+            _disp.fillRect(bx + 1,
+                           BAR_TOP + 1 + (BAR_H - 2) - fillH,
+                           BAR_W - 2, fillH, SSD1306_WHITE);
+        }
+
+        // 0 dB tick mark (1 px wide, drawn over the outline)
+        _disp.drawPixel(bx, ZERO_DB_Y, SSD1306_WHITE);
+    }
+
+    // ── Frequency labels ──────────────────────────────────────────────────────
+    static const char* const FREQ_LABELS[] = {"32", "250", "1k", "4k", "16k"};
+    _disp.setTextSize(1);
+    for (uint8_t i = 0; i < 5; i++) {
+        int16_t bx  = BAR_START + (int16_t)(i * (BAR_W + BAR_GAP)) + _pageSlideX;
+        int16_t lw  = textWidth(FREQ_LABELS[i], 1);
+        int16_t lx  = bx + BAR_W / 2 - lw / 2;
+        _disp.setCursor(lx, LABEL_Y);
+        _disp.print(FREQ_LABELS[i]);
     }
 }
 

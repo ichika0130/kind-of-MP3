@@ -46,7 +46,7 @@ bool BLEManager::begin(DisplayState& /*state*/) {
     // ── Service ───────────────────────────────────────────────────────────────
     _service = _server->createService(
         BLEUUID(BLE_SVC_UUID),
-        /*numHandles=*/60   // 21 chars × 2 handles + 12 CCCDs + service decl
+        /*numHandles=*/80   // 25 chars × 2 handles + 14 CCCDs + service decl
     );
     if (!_service) {
         Serial.println("[ble] createService failed — out of memory?");
@@ -66,6 +66,8 @@ bool BLEManager::begin(DisplayState& /*state*/) {
     _cSpm      = _makeNotify(_service, BLE_CHR_SPM);
     _cPage     = _makeNotify(_service, BLE_CHR_PAGE);
     _cDarkHour = _makeNotify(_service, BLE_CHR_DARK_HOUR);
+    _cEqPreset = _makeNotify(_service, BLE_CHR_EQ_PRESET);
+    _cEqBands  = _makeNotify(_service, BLE_CHR_EQ_BANDS);
 
     // ── Command characteristics (write) ───────────────────────────────────────
     _makeWrite(_service, BLE_CMD_PLAYPAUSE,  BLECmdType::PLAY_PAUSE);
@@ -77,6 +79,8 @@ bool BLEManager::begin(DisplayState& /*state*/) {
     _makeWrite(_service, BLE_CMD_SET_TIME,   BLECmdType::SET_BASE_TIME);
     _makeWrite(_service, BLE_CMD_SET_WEIGHT, BLECmdType::SET_USER_WEIGHT);
     _makeWrite(_service, BLE_CMD_VIBRATE,    BLECmdType::TRIGGER_VIBRATION);
+    _makeWrite(_service, BLE_CMD_SET_EQ_PRESET, BLECmdType::SET_EQ_PRESET);
+    _makeWrite(_service, BLE_CMD_SET_EQ_BANDS,  BLECmdType::SET_EQ_BANDS);
 
     _service->start();
 
@@ -245,6 +249,19 @@ void BLEManager::_sendNotifications(const DisplayState& state) {
         _cDarkHour->setValue(&v, 1);
         _cDarkHour->notify();
     }
+
+    // eqPreset — uint8
+    {
+        uint8_t v = state.eqPreset;
+        _cEqPreset->setValue(&v, 1);
+        _cEqPreset->notify();
+    }
+
+    // eqBands — 5 × int8_t (sent as raw bytes)
+    {
+        _cEqBands->setValue((uint8_t*)state.eqBands, 5);
+        _cEqBands->notify();
+    }
 }
 
 // ─── _processCommands ────────────────────────────────────────────────────────
@@ -318,6 +335,22 @@ void BLEManager::_processCommands(DisplayState& state, AudioManager& audio,
                 _startVibration(ms);
                 break;
             }
+
+            case BLECmdType::SET_EQ_PRESET:
+                if (cmd.len >= 1 && cmd.data[0] < 4) {
+                    audio.applyEQPreset(cmd.data[0]);
+                    state.eqPreset = cmd.data[0];
+                }
+                break;
+
+            case BLECmdType::SET_EQ_BANDS:
+                if (cmd.len >= 5) {
+                    int8_t bands[5];
+                    for (uint8_t bi = 0; bi < 5; bi++) bands[bi] = (int8_t)cmd.data[bi];
+                    audio.setEQBands(bands);
+                    memcpy(state.eqBands, bands, 5);
+                }
+                break;
 
             default: break;
         }
