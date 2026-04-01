@@ -81,7 +81,6 @@ public:
 
     // Returns the playlist index of the first track whose title contains
     // 'name' (case-insensitive).  Returns -1 if not found.
-    // Used by BLEManager to locate the Dark Hour BGM ("tartarus").
     int findTrackByName(const String& name);
 
     // ── Internal callback — do not call from outside ──────────────────────────

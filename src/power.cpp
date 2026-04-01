@@ -144,8 +144,9 @@ void PowerManager::_manageDarkHour(DisplayState& state, uint32_t secInDay) {
         _darkActive     = true;
         _darkFiredToday = true;
         _darkStartMs    = millis();
+        _savedPage      = state.page;                // save so we can restore later
         state.darkHourActive = true;
-        state.page = DisplayPage::NOW_PLAYING;
+        state.page = DisplayPage::DARK_HOUR;         // switch to dedicated page
         Serial.println("[power] Dark Hour activated");
     }
 
@@ -153,6 +154,7 @@ void PowerManager::_manageDarkHour(DisplayState& state, uint32_t secInDay) {
     if (_darkActive && (millis() - _darkStartMs >= DARK_HOUR_DURATION_MS)) {
         _darkActive = false;
         state.darkHourActive = false;
+        state.page = _savedPage;                     // restore previous page
         Serial.println("[power] Dark Hour ended");
     }
 
@@ -180,7 +182,7 @@ void PowerManager::_manageDarkHour(DisplayState& state, uint32_t secInDay) {
 
 void PowerManager::_manageLightSleep(DisplayState& state, AudioManager& audio) {
     // ── Guard conditions ──────────────────────────────────────────────────────
-    if (state.isPlaying || state.bleConnected || state.screenOn) {
+    if (state.isPlaying || state.bleConnected || state.screenOn || state.darkHourActive) {
         _sleepArmMs = 0;   // reset grace timer whenever a guard is active
         return;
     }

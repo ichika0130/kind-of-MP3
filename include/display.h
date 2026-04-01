@@ -32,9 +32,9 @@ enum class DisplayPage : uint8_t {
     CLOCK,
     STEPS,
     BATTERY,
-    // Reserved for future use:
-    // DARK_HOUR,
-    PAGE_COUNT  // keep last — used for cycling
+    PAGE_COUNT,   // upper bound for user-accessible page cycling (keep at 4)
+    DARK_HOUR,    // not user-accessible; entered automatically at midnight
+    WAKE          // wake animation; horizontal orientation, not user-accessible
 };
 
 // ─── Shared state struct ──────────────────────────────────────────────────────
@@ -116,7 +116,8 @@ public:
     bool begin();
 
     // Call each loop iteration with the latest state. Redraws the whole frame.
-    void update(const DisplayState& state);
+    // Non-const: WAKE animation writes state.page = NOW_PLAYING on completion.
+    void update(DisplayState& state);
 
     // Contrast: 0 = darkest, 255 = brightest.
     // Hook this up to volume level once the audio module is integrated.
@@ -128,12 +129,15 @@ public:
 
 private:
     Adafruit_SSD1306 _disp;
+    int              _currentRotation = 0;   // tracks last setRotation() call; avoids redundant I2C commands
 
     // ── Per-page renderers ──
     void drawNowPlaying(const DisplayState& s);
     void drawClock     (const DisplayState& s);
     void drawSteps     (const DisplayState& s);
     void drawBattery   (const DisplayState& s);
+    void drawDarkHour  (const DisplayState& s);
+    void drawWake      (DisplayState& s);            // writes s.page on completion
 
     // ── Scrolling-title state (NOW_PLAYING) ──
     char           _lastTitle[64]     = {};   // char array matches DisplayState::songTitle
@@ -141,8 +145,24 @@ private:
     unsigned long  _lastScrollTick    = 0;
     int16_t        _scrollHoldTicks   = 0;    // non-zero = paused at start/end
 
-    static constexpr uint16_t SCROLL_TICK_MS  = 40;   // px advance every N ms
-    static constexpr uint16_t SCROLL_HOLD_TICKS = 30; // ticks to hold before scrolling
+    // ── Dark Hour animation state ──
+    unsigned long  _darkHourEnteredMs = 0;    // millis() when DARK_HOUR page was entered; 0 = not entered
+
+    // ── WAKE animation state ──
+    int            _wakeAnimState     = 0;    // 0=revealing chars, 1=holding; reset on re-entry
+    int            _wakeCharIndex     = 0;    // chars of "HELLO!" revealed so far (0–6)
+    unsigned long  _wakeAnimTick      = 0;    // last state-transition timestamp; 0 = uninitialised
+
+    // ── Track-change slide animation (NOW_PLAYING) ──
+    int16_t        _slideOffset       = 0;    // Y offset applied to all NOW_PLAYING elements
+    bool           _sliding           = false;
+    unsigned long  _slideStartMs      = 0;
+
+    // ── Page transition tracking ──
+    DisplayPage    _prevPage          = DisplayPage::NOW_PLAYING;
+
+    static constexpr uint16_t SCROLL_TICK_MS   = 40;   // ms between 1-px scroll advances
+    static constexpr uint16_t SCROLL_HOLD_TICKS = 30;  // ticks to hold before scrolling
 
     // ── Helpers ──
     static void    formatSteps(char* buf, size_t len, uint32_t steps);

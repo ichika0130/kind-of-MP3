@@ -121,9 +121,6 @@ void BLEManager::update(DisplayState& state, AudioManager& audio,
 
     // ── Vibration timer ───────────────────────────────────────────────────────
     _updateVibration();
-
-    // ── Dark Hour BGM transition ──────────────────────────────────────────────
-    _updateDarkHour(state, audio);
 }
 
 // ─── _sendNotifications ──────────────────────────────────────────────────────
@@ -308,42 +305,6 @@ void BLEManager::_updateVibration() {
         digitalWrite(VIB_PIN, LOW);
         _vibActive = false;
     }
-}
-
-// ─── _updateDarkHour ─────────────────────────────────────────────────────────
-//
-// Monitors the darkHourActive flag written by PowerManager.
-//
-//  Rising edge  (false → true):
-//    Save the current track index, then search the playlist for a file whose
-//    name contains "tartarus" (case-insensitive).  If found, play it.
-//
-//  Falling edge (true → false):
-//    Resume the saved track from the beginning (byte-level seek not yet impl.).
-
-void BLEManager::_updateDarkHour(DisplayState& state, AudioManager& audio) {
-    bool curr = state.darkHourActive;
-
-    if (curr && !_prevDarkHour) {
-        // ── Rising edge: switch to Tartarus BGM ───────────────────────────────
-        _preHourTrack = audio.getCurrentIndex();
-        int idx = audio.findTrackByName("tartarus");
-        if (idx >= 0) {
-            audio.play(idx);
-            Serial.println("[ble] Dark Hour — playing Tartarus BGM");
-        } else {
-            Serial.println("[ble] Dark Hour — 'tartarus' not found on SD");
-        }
-    } else if (!curr && _prevDarkHour) {
-        // ── Falling edge: restore saved track ────────────────────────────────
-        if (_preHourTrack >= 0) {
-            audio.play(_preHourTrack);
-            Serial.printf("[ble] Dark Hour ended — restored track %d\n", _preHourTrack);
-            _preHourTrack = -1;
-        }
-    }
-
-    _prevDarkHour = curr;
 }
 
 // ─── _enqueueCmd ─────────────────────────────────────────────────────────────

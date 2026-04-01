@@ -5,12 +5,20 @@
 #include "display.h"  // DisplayState, DisplayPage
 
 // ─── Button pin constants ─────────────────────────────────────────────────────
+//
+//  Button 1  GPIO 7   page cycle (GPIO7 chosen: free, non-strapping, not forbidden)
+//  Button 2  GPIO 3   play / pause
+//  Button 3  GPIO 2   previous track / restart  (GPIO1↔2 swapped vs. original wiring)
+//  Button 4  GPIO 1   next track / play-mode cycle
+//  Button 5  GPIO14   volume up
+//  Button 6  GPIO15   volume down
 
-constexpr uint8_t BTN_PREV_PIN     =  1;
-constexpr uint8_t BTN_NEXT_PIN     =  2;
-constexpr uint8_t BTN_PLAY_PIN     =  3;
-constexpr uint8_t BTN_VOL_UP_PIN   = 14;
-constexpr uint8_t BTN_VOL_DOWN_PIN = 15;
+constexpr uint8_t BTN_PAGE_PIN     =  7;   // Button 1 — page cycle (new)
+constexpr uint8_t BTN_PLAY_PIN     =  3;   // Button 2 — play / pause
+constexpr uint8_t BTN_PREV_PIN     =  2;   // Button 3 — previous / restart
+constexpr uint8_t BTN_NEXT_PIN     =  1;   // Button 4 — next / play-mode cycle
+constexpr uint8_t BTN_VOL_UP_PIN   = 14;   // Button 5 — volume up
+constexpr uint8_t BTN_VOL_DOWN_PIN = 15;   // Button 6 — volume down
 
 // ─── ButtonTracker ────────────────────────────────────────────────────────────
 //
@@ -64,16 +72,19 @@ private:
 
 // ─── InputManager ─────────────────────────────────────────────────────────────
 //
-// Owns all five ButtonTrackers and maps their events to AudioManager/DisplayState
+// Owns all six ButtonTrackers and maps their events to AudioManager/DisplayState
 // calls.  Call begin() once in setup(), update() every loop iteration.
 //
 // Button actions summary:
 //
+//   PAGE      short → cycle page (NOW_PLAYING→STEPS→BATTERY)   long → (reserved)
+//   PLAY/PAUSE short → toggle pause/resume                      long → (reserved)
 //   PREV      short → audio.previous()          long → restart current track
 //   NEXT      short → audio.next()              long → cycle play mode
-//   PLAY/PAUSE short → toggle pause/resume      long → cycle display page
 //   VOL+      short → vol +1                    long → vol +1 every 200 ms
 //   VOL-      short → vol -1                    long → vol -1 every 200 ms
+//
+//   CLOCK is not included in the manual page cycle; it is shown automatically.
 
 class InputManager {
 public:
@@ -83,9 +94,10 @@ public:
     void update(AudioManager& audio, DisplayState& state);
 
 private:
+    ButtonTracker _page;
+    ButtonTracker _play;
     ButtonTracker _prev;
     ButtonTracker _next;
-    ButtonTracker _play;
     ButtonTracker _volUp;
     ButtonTracker _volDown;
 };

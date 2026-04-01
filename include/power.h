@@ -84,6 +84,7 @@ private:
     bool          _darkActive     = false;
     bool          _darkFiredToday = false;
     unsigned long _darkStartMs    = 0;
+    DisplayPage   _savedPage      = DisplayPage::NOW_PLAYING;  // page before dark hour
 
     // ── Light sleep ───────────────────────────────────────────────────────────
     unsigned long _sleepArmMs     = 0;   // 0 = not armed; >0 = when conditions first met

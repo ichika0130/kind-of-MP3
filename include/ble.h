@@ -129,10 +129,6 @@ private:
     unsigned long _vibStartMs     = 0;
     uint32_t      _vibDurationMs  = 0;
 
-    // Dark Hour BGM
-    bool _prevDarkHour = false;
-    int  _preHourTrack = -1;   // track index saved before Dark Hour override
-
     // Command queue — written by BLE task, drained by update() on Arduino task
     static constexpr uint8_t QUEUE_SIZE = 8;
     BLECmd           _queue[QUEUE_SIZE];
@@ -149,5 +145,4 @@ private:
                             SensorManager& sensors, PowerManager& power);
     void _updateVibration  ();
     void _startVibration   (uint32_t ms);
-    void _updateDarkHour   (DisplayState& state, AudioManager& audio);
 };

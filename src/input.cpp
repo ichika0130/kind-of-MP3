@@ -77,23 +77,69 @@ ButtonTracker::Event ButtonTracker::poll() {
 // ─── InputManager ─────────────────────────────────────────────────────────────
 
 InputManager::InputManager()
-    : _prev   (BTN_PREV_PIN),
-      _next   (BTN_NEXT_PIN),
+    : _page   (BTN_PAGE_PIN),
       _play   (BTN_PLAY_PIN),
+      _prev   (BTN_PREV_PIN),
+      _next   (BTN_NEXT_PIN),
       _volUp  (BTN_VOL_UP_PIN),
       _volDown(BTN_VOL_DOWN_PIN)
 {}
 
 void InputManager::begin() {
+    _page.begin();
+    _play.begin();
     _prev.begin();
     _next.begin();
-    _play.begin();
     _volUp.begin();
     _volDown.begin();
 }
 
 void InputManager::update(AudioManager& audio, DisplayState& state) {
     using Ev = ButtonTracker::Event;
+
+    // ── PAGE CYCLE ────────────────────────────────────────────────────────────
+    //   short → advance through NOW_PLAYING → STEPS → BATTERY → (wrap)
+    //   CLOCK is excluded from the manual cycle; it is entered automatically.
+    //   If the current page is outside the cycle (e.g. CLOCK, DARK_HOUR, WAKE),
+    //   the press snaps to NOW_PLAYING.
+
+    switch (_page.poll()) {
+        case Ev::SHORT_PRESS: {
+            static constexpr DisplayPage CYCLE[] = {
+                DisplayPage::NOW_PLAYING,
+                DisplayPage::STEPS,
+                DisplayPage::BATTERY,
+            };
+            constexpr uint8_t CYCLE_LEN = sizeof(CYCLE) / sizeof(CYCLE[0]);
+
+            uint8_t next = 0;   // default: go to NOW_PLAYING if not found in cycle
+            for (uint8_t i = 0; i < CYCLE_LEN; i++) {
+                if (state.page == CYCLE[i]) {
+                    next = (i + 1) % CYCLE_LEN;
+                    break;
+                }
+            }
+            state.page = CYCLE[next];
+            Serial.printf("[input] PAGE short: page → %d\n", (int)state.page);
+            break;
+        }
+        default: break;
+    }
+
+    // ── PLAY / PAUSE ──────────────────────────────────────────────────────────
+    //   short → toggle play/pause
+    //   long  → reserved
+
+    switch (_play.poll()) {
+        case Ev::SHORT_PRESS:
+            if (state.isPlaying) {
+                audio.pause();
+            } else {
+                audio.resume();
+            }
+            break;
+        default: break;
+    }
 
     // ── PREVIOUS ──────────────────────────────────────────────────────────────
     //   short → previous()          (AudioManager handles the ">3 s = restart" rule)
@@ -125,28 +171,6 @@ void InputManager::update(AudioManager& audio, DisplayState& state) {
             audio.setPlayMode(next);
             state.playMode = next;   // immediate feedback before next audio.update()
             Serial.printf("[input] NEXT long: play mode → %d\n", (int)next);
-            break;
-        }
-        default: break;
-    }
-
-    // ── PLAY / PAUSE ──────────────────────────────────────────────────────────
-    //   short → toggle play/pause
-    //   long  → cycle display page
-
-    switch (_play.poll()) {
-        case Ev::SHORT_PRESS:
-            if (state.isPlaying) {
-                audio.pause();
-            } else {
-                audio.resume();
-            }
-            break;
-        case Ev::LONG_START: {
-            uint8_t p = ((uint8_t)state.page + 1)
-                        % (uint8_t)DisplayPage::PAGE_COUNT;
-            state.page = static_cast<DisplayPage>(p);
-            Serial.printf("[input] PLAY long: page → %d\n", p);
             break;
         }
         default: break;
