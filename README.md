@@ -82,14 +82,14 @@ P3R Player is an open-source DIY wearable music player modeled after the cylindr
 
 ### 按键 / Buttons（上拉输入，低电平触发 / INPUT_PULLUP, active LOW）
 
-| 功能 / Function | GPIO |
-|---|---|
-| 翻页 / Page Cycle | 7 |
-| 上一曲 / Previous | 1 |
-| 下一曲 / Next | 2 |
-| 播放/暂停 / Play · Pause | 3 |
-| 音量+ / Volume Up | 14 |
-| 音量- / Volume Down | 15 |
+| 功能 / Function | GPIO | 行为 / Behavior |
+|---|---|---|
+| 翻页 / Page Cycle | 7 | 短按：循环切页（NOW_PLAYING → STEPS → BATTERY）；长按 3 s：进入 BLE 配对模式；配对中短按：退出配对 / Short: cycle pages (NOW_PLAYING → STEPS → BATTERY); Long 3 s: enter BLE pairing; Short while pairing: exit pairing |
+| 上一曲 / Previous | 1 | 短按上一曲；长按重头播放 / Short: previous; Long: restart track |
+| 下一曲 / Next | 2 | 短按下一曲；长按切换播放模式 / Short: next; Long: cycle play mode |
+| 播放/暂停 / Play · Pause | 3 | 短按切换播放/暂停；Clock 页短按：HELLO! 动画 + 恢复播放 / Short: toggle play/pause; On Clock page: HELLO! animation + resume |
+| 音量+ / Volume Up | 14 | 短按/长按 +1 步 / Short / long: +1 step |
+| 音量- / Volume Down | 15 | 短按/长按 −1 步 / Short / long: −1 step |
 
 ### 其他 / Miscellaneous
 
@@ -117,15 +117,16 @@ P3R Player is an open-source DIY wearable music player modeled after the cylindr
 
 ### 显示界面 / Display Pages
 
-设备共有 **4 个显示页面**，通过长按播放键循环切换：
-The device has **4 display pages**, cycled by a long-press of the Play button:
+设备共有 **5 个显示页面**（4 个用户可切换，通过翻页键短按循环；1 个系统页面）：
+The device has **5 display pages** — 4 user-accessible (cycled by Button 1 short press), plus 1 system page:
 
 | 页面 / Page | 内容 / Content |
 |---|---|
 | 🎵 Now Playing | 滚动歌名、进度条、播放/暂停图标、时间 |
-| 🕐 Clock | 软件 RTC 时钟（由 BLE 同步时间）|
+| 🕐 Clock | 软件 RTC 时钟（由 BLE 同步时间）；睡眠唤醒后自动显示 / auto-shown on wake |
 | 👟 Steps | 计步数、卡路里消耗、步频（SPM）|
 | 🔋 Battery | 电池百分比、电量条 |
+| 📶 BLE Pairing | 全屏蓝牙图标，配对状态（PAIR / CONN）；长按翻页键 3 s 进入，60 s 超时或连接后自动退出 / Full-screen Bluetooth symbol; status PAIR or CONN; entered by long-pressing Button 1 for 3 s; auto-exits on connection or 60 s timeout |
 
 - 屏幕亮度随音量自动调节 / Screen brightness linked to volume level
 - 拿起设备时屏幕自动亮起，静止 5 秒后熄屏 / Screen wakes on pick-up, sleeps after 5 s of inactivity
@@ -152,6 +153,9 @@ The device has **4 display pages**, cycled by a long-press of the Play button:
 - **轻度睡眠（Light Sleep）**：屏幕关闭 + 音乐暂停 + 无 BLE 连接时自动进入；按键或 MPU6050 唤醒
 - **Light sleep** when screen is off, audio paused, and BLE disconnected; woken by any button or motion interrupt
 
+- **唤醒流程 / Wake sequence**：任意按键或抬腕唤醒 → 显示 **Clock** 页面（5 s）→ 无操作则重新睡眠；在 Clock 页短按 Button 2（播放键）→ HELLO! 动画 → 跳转 NOW_PLAYING 并恢复播放
+- **Wake sequence**: any button or wrist-raise → **Clock** page shown for 5 s → re-enters sleep on timeout; pressing Button 2 (Play) on the Clock page → HELLO! animation → NOW_PLAYING with playback resumed
+
 - **深度睡眠（Deep Sleep）**：电量低于 5% 时触发，保存当前曲目/音量/模式至 NVS Flash
 - **Deep sleep** triggered at ≤5% battery; current track, volume, and play mode saved to NVS Flash and restored on next boot
 
@@ -171,6 +175,9 @@ The device has **4 display pages**, cycled by a long-press of the Play button:
 
 - 写入指令：播放/暂停、上/下一曲、设置音量/播放模式/页面/时间/体重、触发振动
 - **Write commands**: play/pause, next/prev, set volume/mode/page/time/weight, trigger vibration
+
+- **BLE 配对模式 / BLE Pairing Mode**：长按翻页键（Button 1）3 秒进入，显示全屏蓝牙图标页面；60 秒无连接自动退出并恢复原页面；配对成功后自动退出；连接中所有页面均在电池图标旁显示小蓝牙图标（DARK_HOUR 和 WAKE 动画页除外）
+- **BLE Pairing Mode**: hold Button 1 (PAGE) for 3 s to enter; shows full-screen Bluetooth icon page; auto-exits after 60 s without a connection, reverting to the previous page; auto-exits on successful pairing; a small Bluetooth icon appears next to the battery indicator on all pages while connected (except DARK_HOUR and WAKE animation)
 
 ---
 
