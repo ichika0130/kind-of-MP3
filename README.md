@@ -117,8 +117,8 @@ P3R Player is an open-source DIY wearable music player modeled after the cylindr
 
 ### 显示界面 / Display Pages
 
-设备共有 **6 个显示页面**（5 个用户可切换，通过翻页键短按循环；1 个系统页面）：
-The device has **6 display pages** — 5 user-accessible (cycled by Button 1 short press), plus 1 system page:
+设备共有 **7 个显示页面**（5 个用户可切换，通过翻页键短按循环；2 个系统页面）：
+The device has **7 display pages** — 5 user-accessible (cycled by Button 1 short press), plus 2 system pages:
 
 | 页面 / Page | 内容 / Content | 进入方式 / Entry |
 |---|---|---|
@@ -128,6 +128,7 @@ The device has **6 display pages** — 5 user-accessible (cycled by Button 1 sho
 | 🔋 Battery | 电池百分比、电量条 | 翻页键循环 / page cycle |
 | 🎛️ EQ | 5 频段均衡器，竖排能量条显示各频段增益，顶部显示当前预设名称 / 5-band equalizer with vertical bar display and preset name | 翻页键循环 / page cycle |
 | 📶 BLE Pairing | 全屏蓝牙图标，配对状态（PAIR / CONN）；长按翻页键 3 s 进入，60 s 超时或连接后自动退出 / Full-screen Bluetooth symbol; status PAIR or CONN; entered by long-pressing Button 1 for 3 s; auto-exits on connection or 60 s timeout | 长按翻页键 3 s / Long-press Button 1 |
+| 🔌 USB MSC | 数据线图标，USB 连接电脑时显示 / Cable icon, shown while USB connected to computer | USB 连接自动触发 / auto on USB connect |
 
 页面切换时使用**右滑入场动画**（200 ms），换曲时使用**下滑动画**（NOW_PLAYING 页）。
 Page transitions use a **right-slide-in animation** (200 ms); track changes on the NOW_PLAYING page use a **slide-down animation**.
@@ -179,6 +180,20 @@ Page transitions use a **right-slide-in animation** (200 ms); track changes on t
 
 - **电池电量检测**：ADC1_CH6，16× 过采样 + 10 样本滚动平均
 - **Battery ADC** on GPIO7 with 16× oversampling and 10-sample rolling average
+
+### USB 大容量存储 / USB Mass Storage (MSC)
+
+- 通过 USB-C 连接电脑，SD 卡作为可移动磁盘挂载，可直接拖放音乐文件
+- Plug into a computer via USB-C → SD card appears as a removable drive; drag-and-drop music files directly
+
+- USB MSC 激活期间音频自动暂停，BLE 广播停止
+- Audio pauses and BLE advertising stops while USB MSC mode is active
+
+- 断开连接后 SD 卡安全重挂载，音频自动恢复播放
+- Safe SD remount and audio resume on disconnect
+
+- 连接期间显示专用 **USB MSC** 页面（数据线图标）
+- Dedicated **USB MSC** display page (cable icon) shown while connected
 
 ### BLE 蓝牙 / BLE
 
@@ -243,6 +258,12 @@ Enables verbose logging (`CORE_DEBUG_LEVEL=5`). Monitor with:
 ```bash
 pio device monitor
 ```
+
+### USB MSC 注意事项 / USB MSC Note
+
+`platformio.ini` 中的 `-DARDUINO_USB_MODE=0` 标志启用原生 USB OTG 模式，USB MSC 功能需要此标志才能工作。该模式下串口调试输出通过 USB CDC 继续正常工作（无需额外配置）。
+
+The `-DARDUINO_USB_MODE=0` flag in `platformio.ini` enables native USB OTG mode, which is required for USB MSC to function. Serial debug output continues to work via USB CDC in this mode — no additional configuration needed.
 
 ### MicroSD 卡要求 / MicroSD Requirements
 
