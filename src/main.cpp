@@ -2,14 +2,18 @@
 //  main.cpp — P3R wearable MP3 player
 //
 //  Modules (in init order):
-//    Power → Display → Audio → Sensors → Input → BLE
+//    Power → USB → Display → Audio → Sensors → Input → BLE
 //
 //  Loop order:
-//    power → audio → sensors → input → ble → contrast sync → display
+//    power → usb → audio (skipped in USB MSC mode) → sensors → input
+//    → ble → contrast sync → display
 //
 //  Watchdog: 10-second TWDT on the Arduino loop task.
 //  Light sleep: power.update() may block in esp_light_sleep_start(); the WDT
 //  is reset immediately on wake (see power.cpp _manageLightSleep).
+//  USB MSC: UsbManager is declared as a global so its USBMSC member constructor
+//  runs at global-init time, registering the MSC descriptor before USB.begin()
+//  assembles the TinyUSB configuration in app_main().
 // ─────────────────────────────────────────────────────────────────────────────
 
 #include <Arduino.h>
@@ -20,8 +24,12 @@
 #include "sensors.h"
 #include "power.h"
 #include "ble.h"
+#include "usb.h"
 
 // ─── Module instances ─────────────────────────────────────────────────────────
+//
+// UsbManager MUST be a global (not stack-allocated in setup()) so that its
+// USBMSC member constructor fires before app_main() and USB.begin().
 
 DisplayManager display;
 AudioManager   audio;
@@ -29,6 +37,7 @@ InputManager   input;
 SensorManager  sensors;
 PowerManager   power;
 BLEManager     ble;
+UsbManager     usb;    // global: USBMSC ctor registers MSC descriptor at init time
 DisplayState   state;
 
 // ─── setup ───────────────────────────────────────────────────────────────────
@@ -51,6 +60,14 @@ void setup() {
     Serial.println("[boot] power...");
     power.begin();
     Serial.println("[boot] power OK");
+
+    // ── USB MSC ───────────────────────────────────────────────────────────────
+    // begin() registers read/write callbacks and MSC identity strings.
+    // The actual TinyUSB interface was already registered by the USBMSC member
+    // constructor at global-init time (before USB.begin() in app_main()).
+    Serial.println("[boot] usb...");
+    usb.begin();
+    Serial.println("[boot] usb OK");
 
     // ── Display ───────────────────────────────────────────────────────────────
     // Also initialises the I2C bus (Wire, SDA=8, SCL=9) used by the MPU6050.
@@ -135,34 +152,44 @@ void loop() {
     //    Updates batteryPct (every 30 s), ticks the software RTC, manages Dark
     //    Hour, and enters light sleep when idle.  Light sleep may block until a
     //    wake source fires; the WDT is reset immediately on wake (power.cpp).
+    //    usbMscActive == true prevents light sleep (checked in power.cpp).
     power.update(state, audio);
 
-    // ── 2. Audio engine tick ─────────────────────────────────────────────────
-    //    Drives the decoder, polls headphone detect, writes songTitle/position/
-    //    duration/isPlaying/playMode/volume to state.
-    audio.update(state);
+    // ── 2. USB MSC management ────────────────────────────────────────────────
+    //    Detects USB host connect / disconnect.  On connect: pauses audio,
+    //    exposes SD to the USB host, and switches to the USB_MSC page.
+    //    On disconnect: remounts SD, resumes audio, restores previous page.
+    usb.update(state, audio);
 
-    // ── 3. Sensor tick ───────────────────────────────────────────────────────
+    // ── 3. Audio engine tick ─────────────────────────────────────────────────
+    //    Skipped while USB MSC is active to prevent concurrent SPI access
+    //    between the TinyUSB task (raw block reads/writes) and the audio
+    //    decoder (file reads via FatFS).
+    if (!usb.isActive()) {
+        audio.update(state);
+    }
+
+    // ── 4. Sensor tick ───────────────────────────────────────────────────────
     //    Samples MPU6050 at 50 Hz.  Writes stepCount, caloriesBurned,
     //    stepsPerMinute, screenOn to state; calls display.wake()/sleep() on
     //    screen-state transitions.
     sensors.update(state, audio, display);
 
-    // ── 4. Button input ──────────────────────────────────────────────────────
+    // ── 5. Button input ──────────────────────────────────────────────────────
     //    Polls all five buttons; dispatches short/long-press actions against
-    //    audio and state.  Reads state.isPlaying written by step 2.
+    //    audio and state.  Reads state.isPlaying written by step 3.
     input.update(audio, state);
 
-    // ── 5. BLE ───────────────────────────────────────────────────────────────
+    // ── 6. BLE ───────────────────────────────────────────────────────────────
     //    Syncs bleConnected, sends 500 ms status notifications, dispatches
-    //    write commands, manages the vibration motor, handles Dark Hour BGM.
-    //    No-op if BLE init failed.
+    //    write commands (suppressed in USB MSC mode), manages the vibration
+    //    motor, handles Dark Hour BGM.  No-op if BLE init failed.
     ble.update(state, audio, sensors, power);
 
-    // ── 6. Volume → contrast sync ────────────────────────────────────────────
+    // ── 7. Volume → contrast sync ────────────────────────────────────────────
     //    Maps volume 0–21 → contrast 40–255 so the display dims with the audio.
     display.setContrast((uint8_t)(40 + (uint16_t)state.volume * 10));
 
-    // ── 7. Render ─────────────────────────────────────────────────────────────
+    // ── 8. Render ─────────────────────────────────────────────────────────────
     display.update(state);
 }

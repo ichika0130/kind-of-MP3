@@ -136,6 +136,9 @@ private:
     bool          _prevPairingMode = false;
     unsigned long _pairingStartMs  = 0;
 
+    // USB MSC mode — tracks transitions to stop/restart advertising
+    bool          _prevUsbActive   = false;
+
     // Vibration
     bool          _vibActive      = false;
     unsigned long _vibStartMs     = 0;

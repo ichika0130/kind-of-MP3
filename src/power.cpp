@@ -218,7 +218,7 @@ void PowerManager::_manageLightSleep(DisplayState& state, AudioManager& audio) {
 
     // ── Normal guard conditions (skipped on forceSleep) ───────────────────────
     if (!forceSleep) {
-        if (state.isPlaying || state.bleConnected || state.screenOn || state.darkHourActive || state.pairingMode) {
+        if (state.isPlaying || state.bleConnected || state.screenOn || state.darkHourActive || state.pairingMode || state.usbMscActive) {
             _sleepArmMs = 0;
             return;
         }

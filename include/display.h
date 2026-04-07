@@ -33,10 +33,11 @@ enum class DisplayPage : uint8_t {
     STEPS,
     BATTERY,
     EQ,           // equaliser — user-accessible; entered via page cycle
-    PAGE_COUNT,   // upper bound for BLE SET_PAGE guard (now 5)
+    PAGE_COUNT,   // upper bound for BLE SET_PAGE guard (value = 5)
     DARK_HOUR,
     WAKE,
-    BLE_PAIRING
+    BLE_PAIRING,
+    USB_MSC       // USB mass-storage mode — shown while SD is handed to the host
 };
 
 // ─── Shared state struct ──────────────────────────────────────────────────────
@@ -114,6 +115,9 @@ struct DisplayState {
     // ── EQ (written by AudioManager::update; modified by BLE) ──
     uint8_t  eqPreset   = 0;     // 0=FLAT 1=HEAVY 2=POP 3=JAZZ 0xFF=custom
     int8_t   eqBands[5] = {};    // per-band gains dB (-40..+6); 32/250/1k/4k/16kHz
+
+    // ── USB MSC (written by UsbManager::update) ──
+    bool     usbMscActive = false;  // true while SD is handed to the USB host
 };
 
 // ─── Display manager ─────────────────────────────────────────────────────────
@@ -149,7 +153,8 @@ private:
     void drawDarkHour  (const DisplayState& s);
     void drawWake      (DisplayState& s);            // writes s.page on completion
     void drawBtPairing (const DisplayState& s);
-    void drawEQ         (const DisplayState& s);
+    void drawEQ        (const DisplayState& s);
+    void drawUsbMsc    (const DisplayState& s);
 
     // ── Small BLE connected indicator ──
     void _drawBleIcon  (int16_t x, int16_t y);

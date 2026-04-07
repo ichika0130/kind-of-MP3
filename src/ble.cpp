@@ -101,6 +101,20 @@ void BLEManager::update(DisplayState& state, AudioManager& audio,
                          SensorManager& sensors, PowerManager& power) {
     if (!_initialized) return;   // begin() failed — nothing to do
 
+    // ── USB MSC mode guard ────────────────────────────────────────────────────
+    // When USB MSC is active: stop advertising (phone should not connect while
+    // the SD bus is in use by the USB host), and skip command processing.
+    if (state.usbMscActive != _prevUsbActive) {
+        _prevUsbActive = state.usbMscActive;
+        if (state.usbMscActive) {
+            BLEDevice::stopAdvertising();
+            Serial.println("[ble] advertising stopped (USB MSC mode)");
+        } else if (!_connected) {
+            BLEDevice::startAdvertising();
+            Serial.println("[ble] advertising resumed after USB MSC");
+        }
+    }
+
     // ── Sync connection state ─────────────────────────────────────────────────
     bool conn = _connected;   // one volatile read
     if (conn != _prevConnected) {
@@ -108,7 +122,7 @@ void BLEManager::update(DisplayState& state, AudioManager& audio,
         state.bleConnected = conn;
         if (conn) {
             Serial.println("[ble] connected");
-        } else {
+        } else if (!state.usbMscActive) {
             BLEDevice::startAdvertising();
             Serial.println("[ble] disconnected — advertising restarted");
         }
@@ -158,7 +172,10 @@ void BLEManager::update(DisplayState& state, AudioManager& audio,
     }
 
     // ── Queued commands from phone ────────────────────────────────────────────
-    _processCommands(state, audio, sensors, power);
+    // Suppressed in USB MSC mode: SD is in use by the USB host.
+    if (!state.usbMscActive) {
+        _processCommands(state, audio, sensors, power);
+    }
 
     // ── Vibration timer ───────────────────────────────────────────────────────
     _updateVibration();

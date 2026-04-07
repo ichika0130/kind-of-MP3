@@ -168,6 +168,7 @@ void DisplayManager::update(DisplayState& state) {
         case DisplayPage::WAKE:        drawWake(state);       break;
         case DisplayPage::EQ:          drawEQ(state);        break;
         case DisplayPage::BLE_PAIRING: drawBtPairing(state); break;
+        case DisplayPage::USB_MSC:     drawUsbMsc(state);    break;
         default: break;
     }
 
@@ -811,6 +812,83 @@ void DisplayManager::drawEQ(const DisplayState& s) {
         int16_t lx  = bx + BAR_W / 2 - lw / 2;
         _disp.setCursor(lx, LABEL_Y);
         _disp.print(FREQ_LABELS[i]);
+    }
+}
+
+// ─── USB_MSC ──────────────────────────────────────────────────────────────────
+//
+//  32 px wide × 128 px tall (rotation 1)
+//
+//  x=0              x=31
+//  ┌────────────────┐
+//  │      USB       │  y=10  "USB" heading, size-1, centred
+//  │  ──────────    │  y=22  separator
+//  │                │
+//  │    ┌──────┐    │  y=32  USB-A connector body (16×10 px, centred)
+//  │    │██████│    │  y=34  filled contact area
+//  │    └──┬───┘    │  y=42
+//  │       │        │  y=42–58  cable
+//  │    ┌──┴──┐     │  y=58  device-side connector (10×8 px, centred)
+//  │    └─────┘     │  y=66
+//  │                │
+//  │      CONN      │  y=80  status label, size-1, centred
+//  │      MSC       │  y=96  sublabel, size-1, centred
+//  └────────────────┘
+
+void DisplayManager::drawUsbMsc(const DisplayState& /*s*/) {
+    using namespace VLayout;
+
+    // ── "USB" heading ────────────────────────────────────────────────────────
+    {
+        _disp.setTextSize(1);
+        const char* heading = "USB";
+        int16_t hw = textWidth(heading, 1);
+        _disp.setCursor((W - hw) / 2 + _pageSlideX, 10);
+        _disp.print(heading);
+    }
+
+    // ── Separator ─────────────────────────────────────────────────────────────
+    _disp.drawFastHLine(4 + _pageSlideX, 22, W - 8, SSD1306_WHITE);
+
+    // ── USB-A connector body ──────────────────────────────────────────────────
+    constexpr int16_t USB_CX  = W / 2;        // 16 — horizontal centre
+    constexpr int16_t USB_BW  = 16;           // connector body width
+    constexpr int16_t USB_BH  = 10;           // connector body height
+    constexpr int16_t USB_BX  = USB_CX - USB_BW / 2;  // 8
+    constexpr int16_t USB_BY  = 32;
+
+    _disp.drawRect (USB_BX + _pageSlideX, USB_BY, USB_BW, USB_BH, SSD1306_WHITE);
+    // Filled contact area (2 px margin inside)
+    _disp.fillRect (USB_BX + 2 + _pageSlideX, USB_BY + 2, USB_BW - 4, USB_BH - 4, SSD1306_WHITE);
+
+    // ── Cable (vertical line from connector bottom to device port) ────────────
+    constexpr int16_t CABLE_Y0 = USB_BY + USB_BH;   // 42
+    constexpr int16_t CABLE_Y1 = 58;
+    _disp.drawFastVLine(USB_CX + _pageSlideX, CABLE_Y0, CABLE_Y1 - CABLE_Y0, SSD1306_WHITE);
+
+    // ── Device-side connector (smaller rect, centred on cable) ────────────────
+    constexpr int16_t DEV_W = 10;
+    constexpr int16_t DEV_H =  8;
+    constexpr int16_t DEV_X = USB_CX - DEV_W / 2;   // 11
+    constexpr int16_t DEV_Y = CABLE_Y1;             // 58
+    _disp.drawRect(DEV_X + _pageSlideX, DEV_Y, DEV_W, DEV_H, SSD1306_WHITE);
+
+    // ── Status label ──────────────────────────────────────────────────────────
+    {
+        _disp.setTextSize(1);
+        const char* status = "CONN";
+        int16_t sw = textWidth(status, 1);
+        _disp.setCursor((W - sw) / 2 + _pageSlideX, 80);
+        _disp.print(status);
+    }
+
+    // ── "MSC" sublabel ────────────────────────────────────────────────────────
+    {
+        _disp.setTextSize(1);
+        const char* sub = "MSC";
+        int16_t ssw = textWidth(sub, 1);
+        _disp.setCursor((W - ssw) / 2 + _pageSlideX, 96);
+        _disp.print(sub);
     }
 }
 
